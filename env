@@ -1,0 +1,6 @@
+MODEL_NAME=bartowski/dolphin-2.9-llama3-8b-GGUF
+MODEL_TYPE=huggingface
+LOAD_MODEL_ON_STARTUP=true
+API_KEY=your_secret_key  # Optional
+PORT=8000
+HOST=0.0.0.0

@@ -1,0 +1,26 @@
+# FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# LLM and ML dependencies
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.24.0
+tokenizers>=0.15.0
+
+# System monitoring
+psutil>=5.9.0
+
+# Rate limiting
+slowapi>=0.1.9
+
+# Additional utilities
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+
+# Optional: For GGUF support (future)
+llama-cpp-python==0.2.11
+
+# Optional: For Ollama support (future)
+# ollama>=0.1.0
