@@ -77,7 +77,7 @@ class LLMHandler:
                         "Q4_K_S",    # Faster than Q4_K_M, slightly lower quality
                         "Q4_0",      # Fast quantization
                         "Q5_K_M",    # Higher quality but slower
-                        "Q6_K",      # High quality, slower
+                        "Q6_K_M",    # High quality, slower
                         "Q3_K_M",    # Fastest, lower quality
                         "Q3_K_S"
                     ]
@@ -118,32 +118,49 @@ class LLMHandler:
                 if not model_path:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
                 
-                # Load the model with simplified, conservative settings for reliability
+                # Load the model with optimized settings for speed
                 logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
-                    n_ctx=1024,  # Reduced context window
-                    n_threads=4,  # Conservative thread count
+                    n_ctx=1024,  # Context window
+                    n_threads=6,  # Slightly more threads for speed
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping
                     use_mlock=False,  # Disable memory locking for Railway
                     verbose=False,  # Disable verbose
-                    n_batch=128,  # Conservative batch size
-                    seed=-1
+                    n_batch=256,  # Larger batch for speed
+                    seed=-1,
+                    # Speed optimizations:
+                    rope_freq_base=10000.0,
+                    rope_freq_scale=1.0,
+                    mul_mat_q=True,  # Enable quantized matrix multiplication
+                    f16_kv=True,  # Use FP16 for key-value cache
+                    logits_all=False,  # Only compute necessary logits
+                    vocab_only=False,
+                    use_mlock=False,
+                    numa=False
                 )
             else:
                 # Local file path
                 logger.info(f"Loading local model from path: {model_name}")
                 self.model = Llama(
                     model_path=model_name,
-                    n_ctx=1024,  # Reduced context window
-                    n_threads=4,  # Conservative thread count
+                    n_ctx=1024,  # Context window
+                    n_threads=6,  # Slightly more threads for speed
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,
                     use_mlock=False,
                     verbose=False,
-                    n_batch=128,  # Conservative batch size
-                    seed=-1
+                    n_batch=256,  # Larger batch for speed
+                    seed=-1,
+                    # Speed optimizations:
+                    rope_freq_base=10000.0,
+                    rope_freq_scale=1.0,
+                    mul_mat_q=True,
+                    f16_kv=True,
+                    logits_all=False,
+                    vocab_only=False,
+                    numa=False
                 )
             
             self.model_name = model_name
@@ -179,13 +196,9 @@ class LLMHandler:
         )
     
     def _format_chat_prompt(self, user_message: str) -> str:
-        """Format prompt using Phi-3.5 chat template"""
-        # Phi-3.5 uses this specific chat format
-        system_message = "You are a helpful AI assistant. Provide clear, informative, and helpful responses."
-        
-        formatted_prompt = f"""<s><|system|>
-{system_message}<|end|>
-<|user|>
+        """Format prompt using correct Phi-3.5 chat template"""
+        # Use the simpler, more reliable Phi-3.5 format
+        formatted_prompt = f"""<|user|>
 {user_message}<|end|>
 <|assistant|>
 """
@@ -202,15 +215,22 @@ class LLMHandler:
         start_time = time.time()
         
         try:
-            # Direct generation without thread pool
+            # Direct generation with optimized parameters for speed
             output = self.model.create_completion(
                 prompt=formatted_prompt,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=request.stop_sequences or ["<|end|>", "<|user|>", "<|system|>"],
+                stop=["<|end|>", "<|user|>", "<|assistant|>"],
                 stream=False,
-                echo=False
+                echo=False,
+                # Speed optimizations:
+                repeat_penalty=1.05,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+                tfs_z=1.0,
+                typical_p=1.0,
+                mirostat_mode=0
             )
             
             generated_text = output['choices'][0]['text'].strip()
@@ -242,15 +262,22 @@ class LLMHandler:
         token_count = 0
         
         try:
-            # Direct streaming without thread pool
+            # Direct streaming with speed optimizations
             stream = self.model.create_completion(
                 prompt=formatted_prompt,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=request.stop_sequences or ["<|end|>", "<|user|>", "<|system|>"],
+                stop=["<|end|>", "<|user|>", "<|assistant|>"],
                 stream=True,
-                echo=False
+                echo=False,
+                # Speed optimizations:
+                repeat_penalty=1.05,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+                tfs_z=1.0,
+                typical_p=1.0,
+                mirostat_mode=0
             )
             
             for output in stream:
@@ -270,7 +297,7 @@ class LLMHandler:
                         is_final = (
                             finish_reason is not None or
                             token_count >= request.max_tokens or
-                            any(stop in delta for stop in ["<|end|>", "<|user|>", "<|system|>"])
+                            any(stop in delta for stop in ["<|end|>", "<|user|>", "<|assistant|>"])
                         )
                         
                         yield StreamChunk(
