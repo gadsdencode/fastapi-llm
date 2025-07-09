@@ -260,29 +260,23 @@ class LLMHandler:
         token_count = 0
         
         try:
-            # Use thread pool for streaming to avoid blocking
-            loop = asyncio.get_event_loop()
+            # Direct streaming without thread pool to avoid hanging
+            stream = self.model.create_completion(
+                prompt=request.prompt,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                stop=request.stop_sequences or [],
+                stream=True,
+                # Optimizations for streaming:
+                repeat_penalty=1.1,
+                tfs_z=1.0,
+                typical_p=1.0,
+                mirostat_mode=0,
+                echo=False
+            )
             
-            def stream_generator():
-                return self.model.create_completion(
-                    prompt=request.prompt,
-                    max_tokens=request.max_tokens,
-                    temperature=request.temperature,
-                    top_p=request.top_p,
-                    stop=request.stop_sequences or [],
-                    stream=True,
-                    # Optimizations for streaming:
-                    repeat_penalty=1.1,
-                    tfs_z=1.0,
-                    typical_p=1.0,
-                    mirostat_mode=0,
-                    echo=False
-                )
-            
-            # Get streaming iterator in thread
-            stream_iter = await loop.run_in_executor(self.executor, stream_generator)
-            
-            for output in stream_iter:
+            for output in stream:
                 if 'choices' in output and len(output['choices']) > 0:
                     choice = output['choices'][0]
                     delta = choice.get('text', '')
@@ -314,7 +308,7 @@ class LLMHandler:
                         if is_final:
                             break
                             
-                        # Smaller sleep for faster streaming
+                        # Allow other coroutines to run
                         await asyncio.sleep(0.001)
                         
         except Exception as e:
