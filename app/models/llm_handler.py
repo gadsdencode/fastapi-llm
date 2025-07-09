@@ -42,13 +42,13 @@ class LLMHandler:
     async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False) -> bool:
         """Load a model based on type with optimized parameters
         
-        Optimizations implemented:
-        1. Context Window: Set to 4096 to match TinyDolphin's training (fixes n_ctx_per_seq warning)
-        2. KV Cache: Use Q8_0 quantization (type_k=8, type_v=8) for faster inference than F16
+        CORRECT Optimizations implemented based on research:
+        1. Context Window: Conservative 2048 for Railway memory constraints (4096 can cause OOM)
+        2. KV Cache: Use default F16 (type_k/type_v quantization is experimental and causes failures)
         3. Thread Optimization: Dynamic thread count based on available CPU cores (4-8 threads)
         4. MoE Optimization: Larger batch size (512) for Mixture of Experts efficiency
         5. Memory Mapping: Enabled for faster model loading
-        6. Removed flash_attn: Was causing "old ggml_cpy() method" compatibility warnings
+        6. Proven Parameters: Only use stable, tested optimizations that don't cause context failures
         """
         if self.is_loaded() and self.model_name == model_name and not force_reload:
             logger.info(f"Model {model_name} already loaded")
@@ -129,31 +129,28 @@ class LLMHandler:
                 if not model_path:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
                 
-                # Load the model with optimized settings for TinyDolphin speed
+                # Load the model with PROVEN stable settings for TinyDolphin MoE
                 logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
-                    n_ctx=4096,  # Match TinyDolphin's training context (fixes n_ctx_per_seq warning)
-                    n_threads=optimal_threads,  # More threads for MoE model
+                    n_ctx=2048,  # Conservative context size for Railway memory limits
+                    n_threads=optimal_threads,  # Dynamic thread count (4-8 threads)
                     n_gpu_layers=0,  # CPU-only for Railway
-                    use_mmap=True,  # Enable memory mapping
-                    use_mlock=False,  # Disable memory locking for Railway
-                    verbose=False,  # Disable verbose
-                    n_batch=512,  # Larger batch for MoE efficiency
-                    seed=-1,
-                    # Speed optimizations for MoE:
-                    rope_freq_base=10000.0,
-                    rope_freq_scale=1.0,
+                    use_mmap=True,  # Enable memory mapping for faster loading
+                    use_mlock=False,  # Disable memory locking for Railway compatibility
+                    verbose=False,  # Reduce log noise
+                    n_batch=512,  # Larger batch size for MoE efficiency
+                    seed=-1,  # Random seed
+                    # PROVEN stable optimizations:
+                    rope_freq_base=10000.0,  # Standard RoPE frequency
+                    rope_freq_scale=1.0,  # No frequency scaling
                     mul_mat_q=True,  # Enable quantized matrix multiplication
-                    f16_kv=True,  # Use FP16 for key-value cache
+                    f16_kv=True,  # Use F16 for KV cache (stable default)
                     logits_all=False,  # Only compute necessary logits
-                    vocab_only=False,
-                    numa=False,
-                    # KV cache optimizations with Q8_0 quantization for speed:
-                    type_k=8,  # Q8_0 quantization for K cache (faster than F16)
-                    type_v=8,  # Q8_0 quantization for V cache (faster than F16)
-                    offload_kqv=True,  # Keep KQV operations optimized
-                    # Remove flash_attn parameter as it's causing compatibility issues
+                    vocab_only=False,  # Load full model
+                    numa=False,  # Disable NUMA for Railway
+                    offload_kqv=True,  # Optimize KQV operations
+                    # Do NOT use experimental type_k/type_v quantization - causes context failures
                 )
             else:
                 # Local file path
@@ -166,27 +163,24 @@ class LLMHandler:
                 
                 self.model = Llama(
                     model_path=model_name,
-                    n_ctx=4096,  # Match TinyDolphin's training context (fixes n_ctx_per_seq warning)
-                    n_threads=optimal_threads,  # More threads for MoE
+                    n_ctx=2048,  # Conservative context size for Railway memory limits
+                    n_threads=optimal_threads,  # Dynamic thread count (4-8 threads)
                     n_gpu_layers=0,  # CPU-only
-                    use_mmap=True,
-                    use_mlock=False,
-                    verbose=False,
-                    n_batch=512,  # Larger batch for speed
-                    seed=-1,
-                    # Speed optimizations:
-                    rope_freq_base=10000.0,
-                    rope_freq_scale=1.0,
-                    mul_mat_q=True,
-                    f16_kv=True,
-                    logits_all=False,
-                    vocab_only=False,
-                    numa=False,
-                    # KV cache optimizations with Q8_0 quantization for speed:
-                    type_k=8,  # Q8_0 quantization for K cache (faster than F16)
-                    type_v=8,  # Q8_0 quantization for V cache (faster than F16)
-                    offload_kqv=True,  # Keep KQV operations optimized
-                    # Remove flash_attn parameter as it's causing compatibility issues
+                    use_mmap=True,  # Enable memory mapping for faster loading
+                    use_mlock=False,  # Disable memory locking for Railway compatibility
+                    verbose=False,  # Reduce log noise
+                    n_batch=512,  # Larger batch size for MoE efficiency
+                    seed=-1,  # Random seed
+                    # PROVEN stable optimizations:
+                    rope_freq_base=10000.0,  # Standard RoPE frequency
+                    rope_freq_scale=1.0,  # No frequency scaling
+                    mul_mat_q=True,  # Enable quantized matrix multiplication
+                    f16_kv=True,  # Use F16 for KV cache (stable default)
+                    logits_all=False,  # Only compute necessary logits
+                    vocab_only=False,  # Load full model
+                    numa=False,  # Disable NUMA for Railway
+                    offload_kqv=True,  # Optimize KQV operations
+                    # Do NOT use experimental type_k/type_v quantization - causes context failures
                 )
             
             self.model_name = model_name
