@@ -74,7 +74,7 @@ class LLMHandler:
                     logger.info(f"Found GGUF files: {gguf_files}")
                     
                     # Try different quantization patterns in order of preference (smaller first for Railway)
-                    preferred_patterns = ["Q2_K", "Q3_K_S", "Q4_0", "Q4_K_S", "Q5_0", "Q5_K_S", "Q6_K", "Q8_0"]
+                    preferred_patterns = ["Q2_K", "IQ2_M", "Q3_K_S", "IQ3_M", "Q4_0", "Q4_K_S", "IQ4_XS", "Q5_K_S", "Q6_K", "Q8_0"]
                     model_path = None
                     selected_file = None
                     
