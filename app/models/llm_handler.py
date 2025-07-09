@@ -137,7 +137,6 @@ class LLMHandler:
                     f16_kv=True,  # Use FP16 for key-value cache
                     logits_all=False,  # Only compute necessary logits
                     vocab_only=False,
-                    use_mlock=False,
                     numa=False
                 )
             else:
