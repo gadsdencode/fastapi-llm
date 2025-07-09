@@ -40,7 +40,16 @@ class LLMHandler:
         }
     
     async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False) -> bool:
-        """Load a model based on type with optimized parameters"""
+        """Load a model based on type with optimized parameters
+        
+        Optimizations implemented:
+        1. Context Window: Set to 4096 to match TinyDolphin's training (fixes n_ctx_per_seq warning)
+        2. KV Cache: Use Q8_0 quantization (type_k=8, type_v=8) for faster inference than F16
+        3. Thread Optimization: Dynamic thread count based on available CPU cores (4-8 threads)
+        4. MoE Optimization: Larger batch size (512) for Mixture of Experts efficiency
+        5. Memory Mapping: Enabled for faster model loading
+        6. Removed flash_attn: Was causing "old ggml_cpy() method" compatibility warnings
+        """
         if self.is_loaded() and self.model_name == model_name and not force_reload:
             logger.info(f"Model {model_name} already loaded")
             return True
@@ -56,8 +65,13 @@ class LLMHandler:
                 import tempfile
                 import os
                 
+                # Optimize CPU threads for Railway (typically 2-4 vCPUs)
+                cpu_count = os.cpu_count() or 4
+                optimal_threads = min(8, max(4, cpu_count))  # Use 4-8 threads for MoE efficiency
+                
                 # Download optimized model for speed
                 logger.info("Downloading GGUF model from Hugging Face...")
+                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads for optimal MoE performance")
                 
                 # First, list all files in the repository to find GGUF files
                 from huggingface_hub import list_repo_files
@@ -119,8 +133,8 @@ class LLMHandler:
                 logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
-                    n_ctx=2048,  # TinyDolphin can handle larger context efficiently
-                    n_threads=8,  # More threads for MoE model
+                    n_ctx=4096,  # Match TinyDolphin's training context (fixes n_ctx_per_seq warning)
+                    n_threads=optimal_threads,  # More threads for MoE model
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping
                     use_mlock=False,  # Disable memory locking for Railway
@@ -135,18 +149,25 @@ class LLMHandler:
                     logits_all=False,  # Only compute necessary logits
                     vocab_only=False,
                     numa=False,
-                    # KV cache optimizations:
-                    flash_attn=True,  # Enable flash attention for faster KV cache
-                    type_k=1,  # Use optimized key type
-                    type_v=1   # Use optimized value type
+                    # KV cache optimizations with Q8_0 quantization for speed:
+                    type_k=8,  # Q8_0 quantization for K cache (faster than F16)
+                    type_v=8,  # Q8_0 quantization for V cache (faster than F16)
+                    offload_kqv=True,  # Keep KQV operations optimized
+                    # Remove flash_attn parameter as it's causing compatibility issues
                 )
             else:
                 # Local file path
                 logger.info(f"Loading local model from path: {model_name}")
+                
+                # Optimize CPU threads for Railway (typically 2-4 vCPUs)
+                cpu_count = os.cpu_count() or 4
+                optimal_threads = min(8, max(4, cpu_count))  # Use 4-8 threads for MoE efficiency
+                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads for optimal MoE performance")
+                
                 self.model = Llama(
                     model_path=model_name,
-                    n_ctx=2048,  # Larger context for TinyDolphin
-                    n_threads=8,  # More threads for MoE
+                    n_ctx=4096,  # Match TinyDolphin's training context (fixes n_ctx_per_seq warning)
+                    n_threads=optimal_threads,  # More threads for MoE
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,
                     use_mlock=False,
@@ -161,10 +182,11 @@ class LLMHandler:
                     logits_all=False,
                     vocab_only=False,
                     numa=False,
-                    # KV cache optimizations:
-                    flash_attn=True,  # Enable flash attention for faster KV cache
-                    type_k=1,  # Use optimized key type
-                    type_v=1   # Use optimized value type
+                    # KV cache optimizations with Q8_0 quantization for speed:
+                    type_k=8,  # Q8_0 quantization for K cache (faster than F16)
+                    type_v=8,  # Q8_0 quantization for V cache (faster than F16)
+                    offload_kqv=True,  # Keep KQV operations optimized
+                    # Remove flash_attn parameter as it's causing compatibility issues
                 )
             
             self.model_name = model_name
