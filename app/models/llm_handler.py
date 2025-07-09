@@ -56,8 +56,7 @@ class LLMHandler:
                 import tempfile
                 import os
                 
-                # Download a smaller quantized model suitable for Railway's 8GB memory limit
-                # Optimized quantization selection for speed/quality balance
+                # Download optimized model for speed
                 logger.info("Downloading GGUF model from Hugging Face...")
                 
                 # First, list all files in the repository to find GGUF files
@@ -71,31 +70,29 @@ class LLMHandler:
                     
                     logger.info(f"Found GGUF files: {gguf_files}")
                     
-                    # Optimized quantization patterns for CPU inference speed
+                    # For TinyDolphin, prioritize Q4_K_M for speed
                     preferred_patterns = [
-                        "Q4_K_M",    # Best speed/quality balance for CPU inference
-                        "Q4_K_S",    # Faster than Q4_K_M, slightly lower quality
-                        "Q4_0",      # Fast quantization
-                        "Q5_K_M",    # Higher quality but slower
-                        "Q6_K_M",    # High quality, slower
-                        "Q3_K_M",    # Fastest, lower quality
-                        "Q3_K_S"
+                        "Q4_K_M",    # Target quantization for speed/quality balance
+                        "Q4_K_S",    # Backup option
+                        "Q4_0",      # Fast fallback
+                        "Q3_K_M",    # Fastest option
+                        "Q5_K_M"     # Higher quality if needed
                     ]
                     model_path = None
                     selected_file = None
                     
-                    # First, try to find the exact Q4_K_M file for Phi-3.5-mini-instruct_Uncensored
-                    phi35_q4km_file = "Phi-3.5-mini-instruct_Uncensored-Q4_K_M.gguf"
-                    if phi35_q4km_file in gguf_files:
-                        selected_file = phi35_q4km_file
-                        logger.info(f"Found optimized target file: {selected_file}")
+                    # Look for the exact TinyDolphin Q4_K_M file
+                    tinydolphin_q4km_files = [f for f in gguf_files if "Q4_K_M" in f]
+                    if tinydolphin_q4km_files:
+                        selected_file = tinydolphin_q4km_files[0]
+                        logger.info(f"Found target TinyDolphin file: {selected_file}")
                     else:
                         # Find the best matching file based on quantization preference
                         for pattern in preferred_patterns:
                             matching_files = [f for f in gguf_files if pattern in f]
                             if matching_files:
                                 selected_file = matching_files[0]  # Take first match
-                                logger.info(f"Selected optimized quantization: {pattern} from file: {selected_file}")
+                                logger.info(f"Selected quantization: {pattern} from file: {selected_file}")
                                 break
                         
                         # If no preferred quantization found, take any GGUF file
@@ -118,19 +115,19 @@ class LLMHandler:
                 if not model_path:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
                 
-                # Load the model with optimized settings for speed
+                # Load the model with optimized settings for TinyDolphin speed
                 logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
-                    n_ctx=1024,  # Context window
-                    n_threads=6,  # Slightly more threads for speed
+                    n_ctx=2048,  # TinyDolphin can handle larger context efficiently
+                    n_threads=8,  # More threads for MoE model
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping
                     use_mlock=False,  # Disable memory locking for Railway
                     verbose=False,  # Disable verbose
-                    n_batch=256,  # Larger batch for speed
+                    n_batch=512,  # Larger batch for MoE efficiency
                     seed=-1,
-                    # Speed optimizations:
+                    # Speed optimizations for MoE:
                     rope_freq_base=10000.0,
                     rope_freq_scale=1.0,
                     mul_mat_q=True,  # Enable quantized matrix multiplication
@@ -144,13 +141,13 @@ class LLMHandler:
                 logger.info(f"Loading local model from path: {model_name}")
                 self.model = Llama(
                     model_path=model_name,
-                    n_ctx=1024,  # Context window
-                    n_threads=6,  # Slightly more threads for speed
+                    n_ctx=2048,  # Larger context for TinyDolphin
+                    n_threads=8,  # More threads for MoE
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,
                     use_mlock=False,
                     verbose=False,
-                    n_batch=256,  # Larger batch for speed
+                    n_batch=512,  # Larger batch for speed
                     seed=-1,
                     # Speed optimizations:
                     rope_freq_base=10000.0,
@@ -195,11 +192,13 @@ class LLMHandler:
         )
     
     def _format_chat_prompt(self, user_message: str) -> str:
-        """Format prompt using correct Phi-3.5 chat template"""
-        # Use the simpler, more reliable Phi-3.5 format
-        formatted_prompt = f"""<|user|>
-{user_message}<|end|>
-<|assistant|>
+        """Format prompt using TinyDolphin chat template"""
+        # TinyDolphin uses a simpler format based on ChatML
+        formatted_prompt = f"""<|im_start|>system
+You are a helpful AI assistant. Provide clear and informative responses.<|im_end|>
+<|im_start|>user
+{user_message}<|im_end|>
+<|im_start|>assistant
 """
         return formatted_prompt
     
@@ -220,7 +219,7 @@ class LLMHandler:
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=["<|end|>", "<|user|>", "<|assistant|>"],
+                stop=["<|im_end|>", "<|im_start|>"],
                 stream=False,
                 echo=False,
                 # Speed optimizations:
@@ -267,7 +266,7 @@ class LLMHandler:
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=["<|end|>", "<|user|>", "<|assistant|>"],
+                stop=["<|im_end|>", "<|im_start|>"],
                 stream=True,
                 echo=False,
                 # Speed optimizations:
@@ -296,7 +295,7 @@ class LLMHandler:
                         is_final = (
                             finish_reason is not None or
                             token_count >= request.max_tokens or
-                            any(stop in delta for stop in ["<|end|>", "<|user|>", "<|assistant|>"])
+                            any(stop in delta for stop in ["<|im_end|>", "<|im_start|>"])
                         )
                         
                         yield StreamChunk(

@@ -34,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration from environment variables
-MODEL_NAME = os.getenv("MODEL_NAME", "bartowski/Phi-3.5-mini-instruct_Uncensored-GGUF")
+MODEL_NAME = os.getenv("MODEL_NAME", "v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF")
 MODEL_TYPE = os.getenv("MODEL_TYPE", "huggingface") 
 LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "false").lower() == "true"
 
