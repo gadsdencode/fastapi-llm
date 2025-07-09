@@ -15,10 +15,10 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_CACHE=/app/models
 ENV HF_HOME=/app/models
-ENV MODEL_NAME=microsoft/DialoGPT-small
+ENV MODEL_NAME=bartowski/Phi-3.5-mini-instruct_Uncensored-GGUF
 ENV MODEL_TYPE=huggingface
 ENV PORT=8000
-ENV LOAD_MODEL_ON_STARTUP=true
+ENV LOAD_MODEL_ON_STARTUP=false
 
 # Create models directory
 RUN mkdir -p /app/models

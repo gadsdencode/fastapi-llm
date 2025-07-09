@@ -22,9 +22,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration from environment variables
-MODEL_NAME = os.getenv("MODEL_NAME", "bartowski/dolphin-2.9-llama3-8b-GGUF")
-MODEL_TYPE = os.getenv("MODEL_TYPE", "huggingface")
-LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "true").lower() == "true"
+MODEL_NAME = os.getenv("MODEL_NAME", "bartowski/Phi-3.5-mini-instruct_Uncensored-GGUF")
+MODEL_TYPE = os.getenv("MODEL_TYPE", "huggingface") 
+LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "false").lower() == "true"
 
 
 @asynccontextmanager

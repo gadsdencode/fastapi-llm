@@ -1,4 +1,4 @@
-MODEL_NAME=bartowski/dolphin-2.9-llama3-8b-GGUF
+MODEL_NAME=bartowski/Phi-3.5-mini-instruct_Uncensored-GGUF
 MODEL_TYPE=huggingface
 LOAD_MODEL_ON_STARTUP=true
 API_KEY=your_secret_key  # Optional

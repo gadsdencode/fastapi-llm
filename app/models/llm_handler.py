@@ -51,22 +51,67 @@ class LLMHandler:
         start_time = time.time()
         
         try:
-            # For GGUF models from Hugging Face
+            # For Railway deployment, use a smaller model that fits in memory constraints
             if model_type == ModelType.GGUF or "/" in model_name:
-                # Download from Hugging Face repo
-                self.model = Llama.from_pretrained(
-                    repo_id=model_name,
-                    filename="*Q8_0.gguf",  # Default to Q8_0 quantization
-                    n_ctx=2048,  # Context window size
-                    n_threads=None,  # Use all available threads
+                # Use huggingface_hub to download GGUF files
+                from huggingface_hub import hf_hub_download
+                import tempfile
+                import os
+                
+                # Download a smaller quantized model suitable for Railway's 8GB memory limit
+                # Using Q4_K_M quantization for balance of quality and size
+                logger.info("Downloading GGUF model from Hugging Face...")
+                
+                # Use a smaller model that fits Railway's constraints
+                if "dolphin" in model_name.lower() or "8b" in model_name.lower():
+                    # Try to find a smaller quantization
+                    possible_files = [
+                        "*Q2_K.gguf",    # ~2.3GB - smallest
+                        "*Q3_K_S.gguf",  # ~2.8GB - small
+                        "*Q4_0.gguf",    # ~3.5GB - medium
+                        "*Q4_K_S.gguf",  # ~3.8GB - medium-small
+                    ]
+                else:
+                    possible_files = ["*.gguf"]
+                
+                # Try downloading different quantizations until one works
+                model_path = None
+                for filename_pattern in possible_files:
+                    try:
+                        logger.info(f"Attempting to download {filename_pattern}")
+                        model_path = hf_hub_download(
+                            repo_id=model_name,
+                            filename=filename_pattern,
+                            cache_dir="/tmp/models"
+                        )
+                        logger.info(f"Successfully downloaded {filename_pattern}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to download {filename_pattern}: {str(e)}")
+                        continue
+                
+                if not model_path:
+                    raise RuntimeError(f"Could not download any GGUF file from {model_name}")
+                
+                # Load the model with Railway-optimized settings
+                self.model = Llama(
+                    model_path=model_path,
+                    n_ctx=1024,  # Reduced context for memory efficiency
+                    n_threads=2,  # Limit threads for Railway
+                    n_gpu_layers=0,  # CPU-only for Railway
+                    use_mmap=True,  # Enable memory mapping
+                    use_mlock=False,  # Disable memory locking for Railway
                     verbose=False
                 )
             else:
                 # Local file path
                 self.model = Llama(
                     model_path=model_name,
-                    n_ctx=2048,  # Context window size
-                    n_threads=None,  # Use all available threads
+                    n_ctx=1024,  # Reduced context window
+                    n_threads=2,  # Limit threads
+                    n_gpu_layers=0,  # CPU-only
+                    use_mmap=True,
+                    use_mlock=False,
                     verbose=False
                 )
             
