@@ -16,7 +16,7 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., description="Input text prompt", min_length=1)
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
     top_p: float = Field(0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter")
-    max_tokens: int = Field(256, ge=1, le=2048, description="Maximum tokens to generate")
+    max_tokens: int = Field(512, ge=1, le=2048, description="Maximum tokens to generate")
     stop_sequences: Optional[List[str]] = Field(None, description="Stop sequences")
     stream: bool = Field(False, description="Enable streaming response")
 

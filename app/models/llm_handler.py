@@ -73,21 +73,29 @@ class LLMHandler:
                     
                     logger.info(f"Found GGUF files: {gguf_files}")
                     
-                    # Try different quantization patterns in order of preference (smaller first for Railway)
-                    preferred_patterns = ["Q2_K", "IQ2_M", "Q3_K_S", "IQ3_M", "Q4_0", "Q4_K_S", "IQ4_XS", "Q5_K_S", "Q6_K", "Q8_0"]
+                    # Try different quantization patterns in order of preference (Q6_K first for better quality)
+                    preferred_patterns = ["Q6_K", "Q5_K_M", "Q5_K_S", "Q4_K_M", "Q4_K_S", "Q4_0", "Q3_K_M", "Q3_K_S", "Q2_K"]
                     model_path = None
                     selected_file = None
                     
-                    # Find the best matching file based on quantization preference
-                    for pattern in preferred_patterns:
-                        matching_files = [f for f in gguf_files if pattern in f]
-                        if matching_files:
-                            selected_file = matching_files[0]  # Take first match
-                            break
-                    
-                    # If no preferred quantization found, take any GGUF file
-                    if not selected_file:
-                        selected_file = gguf_files[0]
+                    # First, try to find the exact Q6_K file for Phi-3.5-mini-instruct_Uncensored
+                    phi35_q6k_file = "Phi-3.5-mini-instruct_Uncensored-Q6_K.gguf"
+                    if phi35_q6k_file in gguf_files:
+                        selected_file = phi35_q6k_file
+                        logger.info(f"Found exact target file: {selected_file}")
+                    else:
+                        # Find the best matching file based on quantization preference
+                        for pattern in preferred_patterns:
+                            matching_files = [f for f in gguf_files if pattern in f]
+                            if matching_files:
+                                selected_file = matching_files[0]  # Take first match
+                                logger.info(f"Selected quantization: {pattern} from file: {selected_file}")
+                                break
+                        
+                        # If no preferred quantization found, take any GGUF file
+                        if not selected_file:
+                            selected_file = gguf_files[0]
+                            logger.warning(f"No preferred quantization found, using: {selected_file}")
                     
                     logger.info(f"Attempting to download {selected_file}")
                     model_path = hf_hub_download(
@@ -104,17 +112,17 @@ class LLMHandler:
                 if not model_path:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
                 
-                # Load the model with Railway-optimized settings
+                # Load the model with optimized settings for Q6_K quantization
                 logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
-                    n_ctx=1024,  # Reduced context for memory efficiency
+                    n_ctx=2048,  # Increased context for better coherence with Q6_K
                     n_threads=None,  # Let llama.cpp decide thread count
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping
                     use_mlock=False,  # Disable memory locking for Railway
                     verbose=True,  # Enable verbose for debugging
-                    n_batch=128,  # Smaller batch size for Railway
+                    n_batch=256,  # Increased batch size for Q6_K
                     rope_scaling_type=None,  # Default rope scaling
                     rope_freq_base=0.0,  # Use model defaults
                     rope_freq_scale=0.0  # Use model defaults
@@ -124,13 +132,13 @@ class LLMHandler:
                 logger.info(f"Loading local model from path: {model_name}")
                 self.model = Llama(
                     model_path=model_name,
-                    n_ctx=1024,  # Reduced context window
+                    n_ctx=2048,  # Increased context window for better coherence
                     n_threads=None,  # Let llama.cpp decide thread count
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,
                     use_mlock=False,
                     verbose=True,  # Enable verbose for debugging
-                    n_batch=128,  # Smaller batch size for Railway
+                    n_batch=256,  # Increased batch size for better performance
                     rope_scaling_type=None,  # Default rope scaling
                     rope_freq_base=0.0,  # Use model defaults
                     rope_freq_scale=0.0  # Use model defaults
