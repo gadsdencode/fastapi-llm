@@ -105,25 +105,35 @@ class LLMHandler:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
                 
                 # Load the model with Railway-optimized settings
+                logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
                     n_ctx=1024,  # Reduced context for memory efficiency
-                    n_threads=2,  # Limit threads for Railway
+                    n_threads=None,  # Let llama.cpp decide thread count
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping
                     use_mlock=False,  # Disable memory locking for Railway
-                    verbose=False
+                    verbose=True,  # Enable verbose for debugging
+                    n_batch=128,  # Smaller batch size for Railway
+                    rope_scaling_type=None,  # Default rope scaling
+                    rope_freq_base=0.0,  # Use model defaults
+                    rope_freq_scale=0.0  # Use model defaults
                 )
             else:
                 # Local file path
+                logger.info(f"Loading local model from path: {model_name}")
                 self.model = Llama(
                     model_path=model_name,
                     n_ctx=1024,  # Reduced context window
-                    n_threads=2,  # Limit threads
+                    n_threads=None,  # Let llama.cpp decide thread count
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,
                     use_mlock=False,
-                    verbose=False
+                    verbose=True,  # Enable verbose for debugging
+                    n_batch=128,  # Smaller batch size for Railway
+                    rope_scaling_type=None,  # Default rope scaling
+                    rope_freq_base=0.0,  # Use model defaults
+                    rope_freq_scale=0.0  # Use model defaults
                 )
             
             self.model_name = model_name
@@ -134,9 +144,12 @@ class LLMHandler:
             return True
             
         except Exception as e:
-            logger.error(f"Failed to load model {model_name}: {str(e)}")
+            error_msg = f"Failed to load model {model_name}: {str(e)}"
+            logger.error(error_msg)
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception args: {e.args}")
             self.model = None
-            raise
+            raise RuntimeError(error_msg) from e
     
     def get_model_info(self) -> ModelInfo:
         """Get information about the currently loaded model"""
