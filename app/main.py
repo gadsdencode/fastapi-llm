@@ -10,9 +10,9 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from .api.endpoints import router, limiter
-from .models.llm_handler import llm_handler
-from .schemas.models import ModelType
+from app.api.endpoints import router, limiter
+from app.models.llm_handler import llm_handler
+from app.schemas.models import ModelType
 
 # Configure logging
 logging.basicConfig(
