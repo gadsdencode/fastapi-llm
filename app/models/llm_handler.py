@@ -62,33 +62,44 @@ class LLMHandler:
                 # Using Q4_K_M quantization for balance of quality and size
                 logger.info("Downloading GGUF model from Hugging Face...")
                 
-                # Use a smaller model that fits Railway's constraints
-                if "dolphin" in model_name.lower() or "8b" in model_name.lower():
-                    # Try to find a smaller quantization
-                    possible_files = [
-                        "*Q2_K.gguf",    # ~2.3GB - smallest
-                        "*Q3_K_S.gguf",  # ~2.8GB - small
-                        "*Q4_0.gguf",    # ~3.5GB - medium
-                        "*Q4_K_S.gguf",  # ~3.8GB - medium-small
-                    ]
-                else:
-                    possible_files = ["*.gguf"]
-                
-                # Try downloading different quantizations until one works
-                model_path = None
-                for filename_pattern in possible_files:
-                    try:
-                        logger.info(f"Attempting to download {filename_pattern}")
-                        model_path = hf_hub_download(
-                            repo_id=model_name,
-                            filename=filename_pattern,
-                            cache_dir="/tmp/models"
-                        )
-                        logger.info(f"Successfully downloaded {filename_pattern}")
-                        break
-                    except Exception as e:
-                        logger.warning(f"Failed to download {filename_pattern}: {str(e)}")
-                        continue
+                # First, list all files in the repository to find GGUF files
+                from huggingface_hub import list_repo_files
+                try:
+                    repo_files = list_repo_files(repo_id=model_name, repo_type="model")
+                    gguf_files = [f for f in repo_files if f.endswith('.gguf')]
+                    
+                    if not gguf_files:
+                        raise ValueError(f"No GGUF files found in {model_name}")
+                    
+                    logger.info(f"Found GGUF files: {gguf_files}")
+                    
+                    # Try different quantization patterns in order of preference (smaller first for Railway)
+                    preferred_patterns = ["Q2_K", "Q3_K_S", "Q4_0", "Q4_K_S", "Q5_0", "Q5_K_S", "Q6_K", "Q8_0"]
+                    model_path = None
+                    selected_file = None
+                    
+                    # Find the best matching file based on quantization preference
+                    for pattern in preferred_patterns:
+                        matching_files = [f for f in gguf_files if pattern in f]
+                        if matching_files:
+                            selected_file = matching_files[0]  # Take first match
+                            break
+                    
+                    # If no preferred quantization found, take any GGUF file
+                    if not selected_file:
+                        selected_file = gguf_files[0]
+                    
+                    logger.info(f"Attempting to download {selected_file}")
+                    model_path = hf_hub_download(
+                        repo_id=model_name,
+                        filename=selected_file,
+                        cache_dir="/tmp/models"
+                    )
+                    logger.info(f"Successfully downloaded {selected_file}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to list or download files from {model_name}: {e}")
+                    raise ValueError(f"Could not download any GGUF file from {model_name}")
                 
                 if not model_path:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
