@@ -134,7 +134,11 @@ class LLMHandler:
                     f16_kv=True,  # Use FP16 for key-value cache
                     logits_all=False,  # Only compute necessary logits
                     vocab_only=False,
-                    numa=False
+                    numa=False,
+                    # KV cache optimizations:
+                    flash_attn=True,  # Enable flash attention for faster KV cache
+                    type_k=1,  # Use optimized key type
+                    type_v=1   # Use optimized value type
                 )
             else:
                 # Local file path
@@ -156,7 +160,11 @@ class LLMHandler:
                     f16_kv=True,
                     logits_all=False,
                     vocab_only=False,
-                    numa=False
+                    numa=False,
+                    # KV cache optimizations:
+                    flash_attn=True,  # Enable flash attention for faster KV cache
+                    type_k=1,  # Use optimized key type
+                    type_v=1   # Use optimized value type
                 )
             
             self.model_name = model_name
