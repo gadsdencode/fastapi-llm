@@ -2,12 +2,8 @@ import os
 import time
 import logging
 import psutil
-from typing import Optional, Dict, Any, Iterator, AsyncIterator
-from threading import Thread
-from queue import Queue, Empty
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+from typing import Optional, Dict, Any, Iterator, AsyncIterator
 
 from llama_cpp import Llama
 
@@ -24,9 +20,7 @@ class LLMHandler:
         self.model_name: Optional[str] = None
         self.model_type: Optional[ModelType] = None
         self.load_time: Optional[float] = None
-        # Thread pool for async inference
-        self.executor = ThreadPoolExecutor(max_workers=2)
-        logger.info("LLM Handler initialized for GGUF models with threading support")
+        logger.info("LLM Handler initialized for GGUF models")
     
     def is_loaded(self) -> bool:
         """Check if a model is currently loaded"""
@@ -124,50 +118,32 @@ class LLMHandler:
                 if not model_path:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
                 
-                # Load the model with optimized settings for CPU inference performance
+                # Load the model with simplified, conservative settings for reliability
                 logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
-                    n_ctx=1024,  # Reduced context window for faster inference
-                    n_threads=os.cpu_count(),  # Use all available CPU cores
+                    n_ctx=1024,  # Reduced context window
+                    n_threads=4,  # Conservative thread count
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping
-                    use_mlock=False,  # Disable memory locking for Railway compatibility
-                    verbose=False,  # Disable verbose to reduce overhead
-                    n_batch=512,  # Increased batch size for better throughput
-                    # Performance optimizations:
-                    logits_all=False,  # Only compute logits for generation
-                    embedding=False,  # Disable embeddings if not needed
-                    rope_freq_base=10000.0,  # Optimize for the model
-                    rope_freq_scale=1.0,
-                    seed=-1,  # Random seed
-                    f16_kv=True,  # Use FP16 for key-value cache
-                    low_vram=True,  # Enable low VRAM mode for better memory efficiency
-                    rope_scaling_type=None,  # Default rope scaling
-                    numa=False  # Disable NUMA for Railway
+                    use_mlock=False,  # Disable memory locking for Railway
+                    verbose=False,  # Disable verbose
+                    n_batch=128,  # Conservative batch size
+                    seed=-1
                 )
             else:
                 # Local file path
                 logger.info(f"Loading local model from path: {model_name}")
                 self.model = Llama(
                     model_path=model_name,
-                    n_ctx=1024,  # Reduced context window for faster inference
-                    n_threads=os.cpu_count(),  # Use all available CPU cores
+                    n_ctx=1024,  # Reduced context window
+                    n_threads=4,  # Conservative thread count
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,
                     use_mlock=False,
-                    verbose=False,  # Disable verbose to reduce overhead
-                    n_batch=512,  # Increased batch size for better performance
-                    # Performance optimizations:
-                    logits_all=False,
-                    embedding=False,
-                    rope_freq_base=10000.0,
-                    rope_freq_scale=1.0,
-                    seed=-1,
-                    f16_kv=True,
-                    low_vram=True,
-                    rope_scaling_type=None,
-                    numa=False
+                    verbose=False,
+                    n_batch=128,  # Conservative batch size
+                    seed=-1
                 )
             
             self.model_name = model_name
@@ -203,42 +179,30 @@ class LLMHandler:
         )
     
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
-        """Generate text from prompt using thread pool to avoid blocking"""
+        """Generate text from prompt - direct execution without threading"""
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
-        # Run inference in thread pool to avoid blocking event loop
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            self.executor,
-            partial(self._sync_generate, request)
-        )
-        return result
-    
-    def _sync_generate(self, request: GenerateRequest) -> GenerateResponse:
-        """Synchronous generation method with optimized parameters"""
+        logger.info(f"Starting generation for prompt: {request.prompt[:50]}...")
         start_time = time.time()
         
         try:
-            # Use create_completion for better performance than chat completion
+            # Direct generation without thread pool
             output = self.model.create_completion(
                 prompt=request.prompt,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
                 stop=request.stop_sequences or [],
-                # Performance optimizations:
-                repeat_penalty=1.1,  # Prevent repetition
-                tfs_z=1.0,  # Tail free sampling
-                typical_p=1.0,  # Typical sampling
-                mirostat_mode=0,  # Disable mirostat for speed
                 stream=False,
-                echo=False  # Don't echo the prompt
+                echo=False
             )
             
             generated_text = output['choices'][0]['text']
             tokens_generated = output['usage']['completion_tokens']
             generation_time = time.time() - start_time
+            
+            logger.info(f"Generation completed in {generation_time:.2f}s, {tokens_generated} tokens")
             
             return GenerateResponse(
                 text=generated_text,
@@ -256,11 +220,12 @@ class LLMHandler:
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
+        logger.info(f"Starting streaming generation for prompt: {request.prompt[:50]}...")
         start_time = time.time()
         token_count = 0
         
         try:
-            # Direct streaming without thread pool to avoid hanging
+            # Direct streaming without thread pool
             stream = self.model.create_completion(
                 prompt=request.prompt,
                 max_tokens=request.max_tokens,
@@ -268,11 +233,6 @@ class LLMHandler:
                 top_p=request.top_p,
                 stop=request.stop_sequences or [],
                 stream=True,
-                # Optimizations for streaming:
-                repeat_penalty=1.1,
-                tfs_z=1.0,
-                typical_p=1.0,
-                mirostat_mode=0,
                 echo=False
             )
             
@@ -324,11 +284,6 @@ class LLMHandler:
             self.model_type = None
             self.load_time = None
             logger.info("Model unloaded successfully")
-    
-    def __del__(self):
-        """Cleanup thread pool on deletion"""
-        if hasattr(self, 'executor'):
-            self.executor.shutdown(wait=False)
 
 
 # Global instance
