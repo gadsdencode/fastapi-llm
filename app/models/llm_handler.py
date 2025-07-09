@@ -178,27 +178,42 @@ class LLMHandler:
             load_time=self.load_time
         )
     
+    def _format_chat_prompt(self, user_message: str) -> str:
+        """Format prompt using Phi-3.5 chat template"""
+        # Phi-3.5 uses this specific chat format
+        system_message = "You are a helpful AI assistant. Provide clear, informative, and helpful responses."
+        
+        formatted_prompt = f"""<s><|system|>
+{system_message}<|end|>
+<|user|>
+{user_message}<|end|>
+<|assistant|>
+"""
+        return formatted_prompt
+    
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
         """Generate text from prompt - direct execution without threading"""
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
+        # Format the prompt properly for Phi-3.5
+        formatted_prompt = self._format_chat_prompt(request.prompt)
         logger.info(f"Starting generation for prompt: {request.prompt[:50]}...")
         start_time = time.time()
         
         try:
             # Direct generation without thread pool
             output = self.model.create_completion(
-                prompt=request.prompt,
+                prompt=formatted_prompt,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=request.stop_sequences or [],
+                stop=request.stop_sequences or ["<|end|>", "<|user|>", "<|system|>"],
                 stream=False,
                 echo=False
             )
             
-            generated_text = output['choices'][0]['text']
+            generated_text = output['choices'][0]['text'].strip()
             tokens_generated = output['usage']['completion_tokens']
             generation_time = time.time() - start_time
             
@@ -220,6 +235,8 @@ class LLMHandler:
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
+        # Format the prompt properly for Phi-3.5
+        formatted_prompt = self._format_chat_prompt(request.prompt)
         logger.info(f"Starting streaming generation for prompt: {request.prompt[:50]}...")
         start_time = time.time()
         token_count = 0
@@ -227,11 +244,11 @@ class LLMHandler:
         try:
             # Direct streaming without thread pool
             stream = self.model.create_completion(
-                prompt=request.prompt,
+                prompt=formatted_prompt,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=request.stop_sequences or [],
+                stop=request.stop_sequences or ["<|end|>", "<|user|>", "<|system|>"],
                 stream=True,
                 echo=False
             )
@@ -253,7 +270,7 @@ class LLMHandler:
                         is_final = (
                             finish_reason is not None or
                             token_count >= request.max_tokens or
-                            (request.stop_sequences and any(stop in delta for stop in request.stop_sequences))
+                            any(stop in delta for stop in ["<|end|>", "<|user|>", "<|system|>"])
                         )
                         
                         yield StreamChunk(
