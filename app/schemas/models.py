@@ -35,6 +35,7 @@ class StreamChunk(BaseModel):
     tokens_generated: int = Field(0, description="Total tokens generated so far")
     generation_time: float = Field(0.0, description="Time elapsed since generation started")
     tokens_per_second: float = Field(0.0, description="Current generation speed")
+    is_final: bool = Field(False, description="Whether this is the final chunk")
 
 
 class ModelInfo(BaseModel):

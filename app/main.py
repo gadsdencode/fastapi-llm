@@ -3,6 +3,18 @@ import logging
 import asyncio
 from contextlib import asynccontextmanager
 
+# Environment optimizations for CPU inference
+os.environ["OMP_NUM_THREADS"] = str(os.cpu_count())
+os.environ["MKL_NUM_THREADS"] = str(os.cpu_count())
+os.environ["OPENBLAS_NUM_THREADS"] = str(os.cpu_count())
+os.environ["VECLIB_MAXIMUM_THREADS"] = str(os.cpu_count())
+os.environ["NUMEXPR_NUM_THREADS"] = str(os.cpu_count())
+
+# Enable Railway-specific optimizations
+if os.getenv("RAILWAY_ENVIRONMENT"):
+    os.environ["MALLOC_TRIM_THRESHOLD_"] = "100000"
+    os.environ["MALLOC_MMAP_THRESHOLD_"] = "131072"
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
