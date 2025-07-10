@@ -1,5 +1,5 @@
-MODEL_NAME=v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
-MODEL_TYPE=huggingface
+MODEL_NAME=v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF
+MODEL_TYPE=gguf
 LOAD_MODEL_ON_STARTUP=true
 API_KEY=your_secret_key  # Optional
 PORT=8000
