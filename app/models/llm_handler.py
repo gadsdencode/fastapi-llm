@@ -412,6 +412,9 @@ class LLMHandler:
             if "llama-3.2" in model_name.lower() or "llama-3" in model_name.lower():
                 # For Llama 3.2/3.x, prioritize Q8_0 for accuracy, then Q4_K_M for speed
                 model_preferences = ["Q8_0", "Q4_K_M", "Q5_K_M", "Q4_K_S", "Q4_0"]
+            elif "wizard-vicuna" in model_name.lower() or "vicuna" in model_name.lower():
+                # For Wizard-Vicuna models, prioritize Q4_K_M for optimal speed/quality balance on 7B models
+                model_preferences = ["Q4_K_M", "Q5_K_M", "Q4_K_S", "Q6_K", "Q8_0", "Q4_0"]
             else:
                 # For other models, prioritize Q4_K_M for speed/quality balance
                 model_preferences = ["Q4_K_M", "Q4_K_S", "Q4_0", "Q3_K_M", "Q5_K_M", "Q8_0"]

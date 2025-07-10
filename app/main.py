@@ -34,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration from environment variables
-MODEL_NAME = os.getenv("MODEL_NAME", "v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF")
+MODEL_NAME = os.getenv("MODEL_NAME", "TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF")
 MODEL_TYPE = os.getenv("MODEL_TYPE", "gguf") 
 LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "true").lower() == "true"
 

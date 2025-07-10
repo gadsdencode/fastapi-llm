@@ -41,7 +41,7 @@ templates:
     stop_tokens:
       - "<|im_end|>"
       - "<|im_start|>"
-    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship.
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
 
   # Mistral/Mixtral format
   mistral:
@@ -61,11 +61,29 @@ templates:
       - "[/INST]"
     default_system_message: ""
 
+  # Vicuna format - Used by Wizard-Vicuna models
+  vicuna:
+    patterns:
+      - "wizard-vicuna"
+      - "vicuna"
+      - "thebloke/wizard-vicuna"
+    format:
+      conversation_start: "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. "
+      system_start: ""
+      system_end: ""
+      user_start: "USER: "
+      user_end: " "
+      assistant_start: "ASSISTANT: "
+      assistant_end: ""
+    stop_tokens:
+      - "USER:"
+      - "ASSISTANT:"
+    default_system_message: ""
+
   # Alpaca format - Common for fine-tuned models
   alpaca:
     patterns:
       - "alpaca"
-      - "vicuna"
     format:
       system_start: "### System:\n"
       system_end: "\n\n"
@@ -99,6 +117,7 @@ templates:
 # Template resolution order - first match wins
 resolution_order:
   - "llama-3"
+  - "vicuna"
   - "mistral" 
   - "codellama"
   - "alpaca"
