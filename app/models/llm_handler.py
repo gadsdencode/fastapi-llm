@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 from llama_cpp import Llama
 
+logger = logging.getLogger(__name__)
+
 # Add transformers import for tokenizer integration
 try:
     from transformers import AutoTokenizer
@@ -19,8 +21,6 @@ except ImportError:
 
 from ..schemas.models import ModelType, GenerateRequest, GenerateResponse, StreamChunk, ModelInfo, ChatMessage
 from ..config import get_template_manager
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
