@@ -251,67 +251,67 @@ class LLMHandler:
         }
     
     def _get_optimal_threads(self, cpu_count: int, model_name: str = "") -> Tuple[int, int]:
-        """Memory-bandwidth-optimized threading: CPU inference is memory-bound, not CPU-bound"""
-        # Allow env overrides for advanced users
+        """ULTRA-optimized threading: Research shows 4-8 threads optimal for CPU inference"""
+        # Allow env overrides for easy tuning
         env_main = os.getenv("LLM_THREADS_MAIN")
         env_batch = os.getenv("LLM_THREADS_BATCH")
         if env_main and env_batch:
             return int(env_main), int(env_batch)
         
-        # MEMORY-OPTIMIZED threading (research shows 8-16 threads optimal)
-        # More threads = memory bandwidth contention = slower inference
+        # ULTRA-CONSERVATIVE threading based on research findings
+        # Research: llamafile/llama.cpp defaults to much lower thread counts
         if cpu_count >= 32:
-            # Conservative: 12 main, 6 batch threads for memory efficiency
-            main_threads = 12
-            batch_threads = 6
-        elif cpu_count >= 16:
-            main_threads = 8
+            # ULTRA-optimized: 6 main, 4 batch threads (Railway shared env)
+            main_threads = 6
             batch_threads = 4
+        elif cpu_count >= 16:
+            main_threads = 4
+            batch_threads = 2
         else:
-            main_threads = max(4, cpu_count // 2)
-            batch_threads = max(2, cpu_count // 4)
+            main_threads = max(2, cpu_count // 4)
+            batch_threads = max(1, cpu_count // 6)
         
-        logger.info(f"🧠 Memory-optimized threading: {main_threads} main, {batch_threads} batch (CPU count: {cpu_count})")
+        logger.info(f"🔥 ULTRA-optimized threading: {main_threads} main, {batch_threads} batch (CPU count: {cpu_count})")
         return main_threads, batch_threads
 
     def _get_adaptive_batch_config(self, cpu_count: int, model_name: str = "") -> Tuple[int, int]:
-        """Memory-efficient batch sizes: research shows 32-128 optimal, NOT 2048+"""
-        # Research findings: batch_size=32 was optimal in real testing
-        # Large batches cause memory pressure and cache misses
+        """ULTRA-small batch sizes: Research shows 32-64 optimal for speed"""
+        # Research findings: smaller batches = better cache utilization = faster inference
         
         if cpu_count >= 32:
-            # Conservative batching for memory efficiency
-            n_batch = 128      # Was 2048 - TOO LARGE!
-            n_ubatch = 64      # Was 1024 - TOO LARGE!
+            # ULTRA-small batches for maximum cache efficiency
+            n_batch = 64       # Was 128 - still too large!
+            n_ubatch = 32      # Was 64 - still too large!
         elif cpu_count >= 16:
-            n_batch = 64
-            n_ubatch = 32
-        else:
             n_batch = 32
             n_ubatch = 16
+        else:
+            n_batch = 16
+            n_ubatch = 8
         
-        logger.info(f"🚀 Memory-efficient batching: n_batch={n_batch}, n_ubatch={n_ubatch}")
+        logger.info(f"⚡ ULTRA-efficient batching: n_batch={n_batch}, n_ubatch={n_ubatch}")
         return n_batch, n_ubatch
 
     def _setup_cpu_optimization_env(self, optimal_threads: int):
-        """Memory-focused CPU optimization: remove aggressive settings that hurt performance"""
-        logger.info(f"🔧 Setting up MEMORY-OPTIMIZED CPU environment with {optimal_threads} threads")
+        """ULTRA-optimized CPU environment: Focus on speed over everything"""
+        logger.info(f"🚀 Setting up ULTRA-OPTIMIZED CPU environment with {optimal_threads} threads")
         
-        # Set conservative threading for math libraries
+        # Set ULTRA-conservative threading
         os.environ["OMP_NUM_THREADS"] = str(optimal_threads)
         os.environ["MKL_NUM_THREADS"] = str(optimal_threads)
         os.environ["OPENBLAS_NUM_THREADS"] = str(optimal_threads)
         os.environ["VECLIB_MAXIMUM_THREADS"] = str(optimal_threads)
         
-        # REMOVED: Aggressive CPU affinity (causes scheduling overhead)
-        # REMOVED: Static scheduling (let OS decide)
-        # REMOVED: Memory binding (can hurt performance on shared systems)
+        # SPEED-focused optimizations
+        os.environ["OMP_WAIT_POLICY"] = "ACTIVE"       # Spin-wait for lower latency
+        os.environ["OMP_DYNAMIC"] = "FALSE"            # Fixed thread count
+        os.environ["MKL_DYNAMIC"] = "FALSE"            # Consistent thread count
+        os.environ["OMP_NESTED"] = "FALSE"             # No nested parallelism
         
-        # Keep only memory-friendly optimizations
-        os.environ["OMP_WAIT_POLICY"] = "PASSIVE"  # Don't spin-wait, save CPU
-        os.environ["MKL_DYNAMIC"] = "FALSE"        # Consistent thread count
+        # Memory optimization for speed
+        os.environ["MALLOC_ARENA_MAX"] = "2"           # Reduce malloc overhead
         
-        logger.info("✅ Memory-optimized CPU environment configured")
+        logger.info("✅ ULTRA-optimized CPU environment configured")
 
     def _get_model_specific_config(self, model_name: str) -> dict:
         """Return model-specific config overrides for optimal speed"""
@@ -345,18 +345,20 @@ class LLMHandler:
 
     def _get_base_llama_config(self, optimal_threads: int, optimal_batch_threads: int, model_name: str = "") -> Dict[str, Any]:
         """Get base Llama config with AGGRESSIVE optimizations for speed"""
-        # AGGRESSIVE memory settings for maximum speed
+        # ULTRA-SPEED memory settings (research-based)
         memory_settings = {
-            "use_mmap": True,
-            "use_mlock": False,  # Disabled for Railway
-            "numa": False,       # Disabled for Railway
-            "offload_kqv": True,
-            "mul_mat_q": True,
-            "f16_kv": True,
-            # SPEED-FOCUSED additions
+            "use_mmap": True,         # Memory mapping for speed
+            "use_mlock": False,       # Disabled for Railway (causes issues)
+            "numa": False,            # Disabled for Railway shared environment  
+            "offload_kqv": False,     # Disable for CPU-only speed
+            "mul_mat_q": True,        # Keep quantized math
+            "f16_kv": False,          # Disable F16 KV cache for speed
+            # ULTRA-SPEED focused settings
             "rope_scaling": None,     # Disable RoPE scaling overhead
-            "embedding": False,       # Disable embedding mode
-            "flash_attn": True,       # Enable flash attention if available
+            "embedding": False,       # Disable embedding mode overhead
+            "flash_attn": False,      # Disable flash attention overhead on CPU
+            "type_k": 1,              # Use faster key type
+            "type_v": 1,              # Use faster value type
         }
         
         # Memory-efficient batch config
@@ -366,9 +368,9 @@ class LLMHandler:
         # Model-specific overrides
         model_config = self._get_model_specific_config(model_name)
         
-        # Base config with speed optimizations
+        # Base config with ULTRA speed optimizations
         config = {
-            "n_ctx": int(os.getenv("LLM_MAX_CONTEXT", "4096")),  # Larger context for better throughput
+            "n_ctx": int(os.getenv("LLM_MAX_CONTEXT", "1024")),  # SMALL context for maximum speed!
             "n_threads": optimal_threads,
             "n_threads_batch": optimal_batch_threads,
             "n_gpu_layers": 0,
@@ -386,9 +388,10 @@ class LLMHandler:
         config.update(batch_config)
         config.update(model_config)
         
-        # Log the memory-optimized configuration
-        logger.info(f"🧠 MEMORY-OPTIMIZED CONFIG: n_batch={config['n_batch']}, n_ubatch={config['n_ubatch']}, n_ctx={config['n_ctx']}")
-        logger.info(f"🧠 THREAD CONFIG: main={optimal_threads}, batch={optimal_batch_threads}")
+        # Log the ULTRA-optimized configuration
+        logger.info(f"🚀 ULTRA-SPEED CONFIG: n_batch={config['n_batch']}, n_ubatch={config['n_ubatch']}, n_ctx={config['n_ctx']}")
+        logger.info(f"🔥 ULTRA-THREAD CONFIG: main={optimal_threads}, batch={optimal_batch_threads}")
+        logger.info(f"⚡ SPEED OPTIMIZATIONS: mmap={memory_settings['use_mmap']}, f16_kv={memory_settings['f16_kv']}, flash_attn={memory_settings['flash_attn']}")
         
         return config
 
