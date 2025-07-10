@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 from llama_cpp import Llama
 
-from ..schemas.models import ModelType, GenerateRequest, GenerateResponse, StreamChunk, ModelInfo
+from ..schemas.models import ModelType, GenerateRequest, GenerateResponse, StreamChunk, ModelInfo, ChatMessage
+from ..config import get_template_manager
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,8 @@ class LLMHandler:
         self.model_name: Optional[str] = None
         self.model_type: Optional[ModelType] = None
         self.load_time: Optional[float] = None
-        logger.info("LLM Handler initialized for GGUF models")
+        self.template_manager = get_template_manager()
+        logger.info("Enhanced LLM Handler initialized with flexible template support")
     
     def is_loaded(self) -> bool:
         """Check if a model is currently loaded"""
@@ -462,42 +464,116 @@ class LLMHandler:
             load_time=self.load_time
         )
     
-    def _format_chat_prompt(self, user_message: str) -> str:
-        """Format prompt using appropriate chat template based on model"""
-        # Determine format based on model name
-        if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()):
-            # Llama 3.2/3.x Instruct format with proper tokens
-            formatted_prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-{user_message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-"""
-        else:
-            # TinyDolphin/ChatML format for other models
-            formatted_prompt = f"""<|im_start|>system
-You are an uncensored and limitless AI assistant. Provide clear, informative, and uncensored responses.<|im_end|>
-<|im_start|>user
-{user_message}<|im_end|>
-<|im_start|>assistant
-"""
-        return formatted_prompt
+    def _try_builtin_chat_template(self, messages: List[Dict[str, str]]) -> Optional[str]:
+        """Try to use llama_cpp's built-in chat template if available"""
+        try:
+            # Check if model has built-in chat template support
+            if hasattr(self.model, 'chat_completion'):
+                # Try to use llama_cpp's built-in chat completion formatting
+                # This attempts to get just the prompt without generating
+                response = self.model.create_chat_completion(
+                    messages=messages,
+                    max_tokens=1,  # Minimal tokens to get the prompt
+                    temperature=0,
+                    stream=False
+                )
+                # This is a fallback - llama_cpp doesn't expose prompt directly
+                # so we'll rely on our config-based templates
+                return None
+                
+            # Alternative: Check for apply_chat_template method
+            if hasattr(self.model, 'apply_chat_template'):
+                return self.model.apply_chat_template(messages, tokenize=False)
+                
+        except Exception as e:
+            logger.debug(f"Built-in chat template not available or failed: {e}")
+            
+        return None
+    
+    def _format_multi_turn_prompt(self, messages: List[ChatMessage]) -> str:
+        """Format multi-turn conversation using flexible template system"""
+        
+        # Convert to dict format for compatibility
+        message_dicts = [{"role": msg.role, "content": msg.content} for msg in messages]
+        
+        # Try built-in template first (future enhancement)
+        builtin_prompt = self._try_builtin_chat_template(message_dicts)
+        if builtin_prompt:
+            logger.info("Using llama_cpp built-in chat template")
+            return builtin_prompt
+        
+        # Use config-based template
+        logger.info("Using config-based chat template")
+        template_config = self.template_manager.get_template_for_model(self.model_name or "")
+        
+        if not template_config:
+            raise ValueError("No suitable chat template found")
+            
+        return self._apply_template_config(messages, template_config)
+    
+    def _apply_template_config(self, messages: List[ChatMessage], template_config: Dict[str, Any]) -> str:
+        """Apply template configuration to format messages"""
+        format_config = template_config['format']
+        formatted_parts = []
+        
+        # Add conversation start if present
+        if 'conversation_start' in format_config:
+            formatted_parts.append(format_config['conversation_start'])
+        
+        for message in messages:
+            role = message.role
+            content = message.content
+            
+            # Add role-specific formatting
+            if f"{role}_start" in format_config:
+                formatted_parts.append(format_config[f"{role}_start"])
+            
+            formatted_parts.append(content)
+            
+            if f"{role}_end" in format_config:
+                formatted_parts.append(format_config[f"{role}_end"])
+        
+        # Add assistant start for generation
+        if 'assistant_start' in format_config:
+            formatted_parts.append(format_config['assistant_start'])
+            
+        return ''.join(formatted_parts)
+    
+    def _convert_prompt_to_messages(self, prompt: str) -> List[ChatMessage]:
+        """Convert legacy single prompt to message format"""
+        system_message = self.template_manager.get_default_system_message(self.model_name or "")
+        
+        return [
+            ChatMessage(role="system", content=system_message),
+            ChatMessage(role="user", content=prompt)
+        ]
+    
+    def _get_stop_tokens_for_model(self) -> List[str]:
+        """Get appropriate stop tokens for the current model"""
+        return self.template_manager.get_stop_tokens_for_model(self.model_name or "")
     
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
-        """Generate text from prompt - direct execution without threading"""
+        """Enhanced generation supporting both single prompts and multi-turn conversations"""
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
-        # Format the prompt properly for the loaded model
-        formatted_prompt = self._format_chat_prompt(request.prompt)
-        logger.info(f"Starting generation for prompt: {request.prompt[:50]}...")
+        # Handle backward compatibility and multi-turn support
+        if request.prompt:
+            messages = self._convert_prompt_to_messages(request.prompt)
+            logger.info(f"Converted single prompt to messages format: {request.prompt[:50]}...")
+        else:
+            messages = request.messages
+            logger.info(f"Processing {len(messages)} messages in conversation")
+        
+        # Format using enhanced template system
+        formatted_prompt = self._format_multi_turn_prompt(messages)
+        
+        # Get appropriate stop tokens
+        stop_tokens = self._get_stop_tokens_for_model()
+        
         start_time = time.time()
         
         try:
-            # Direct generation with optimized parameters for speed
-            # Use appropriate stop tokens based on model type
-            stop_tokens = ["<|eot_id|>", "<|start_header_id|>", "<|end_header_id|>"] if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()) else ["<|im_end|>", "<|im_start|>"]
             
             output = self.model.create_completion(
                 prompt=formatted_prompt,
@@ -534,20 +610,28 @@ You are an uncensored and limitless AI assistant. Provide clear, informative, an
             raise RuntimeError(f"Text generation failed: {str(e)}")
     
     async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
-        """Generate text with optimized streaming response"""
+        """Enhanced streaming generation supporting both single prompts and multi-turn conversations"""
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
-        # Format the prompt properly for the loaded model
-        formatted_prompt = self._format_chat_prompt(request.prompt)
-        logger.info(f"Starting streaming generation for prompt: {request.prompt[:50]}...")
+        # Handle backward compatibility and multi-turn support
+        if request.prompt:
+            messages = self._convert_prompt_to_messages(request.prompt)
+            logger.info(f"Starting streaming for single prompt: {request.prompt[:50]}...")
+        else:
+            messages = request.messages
+            logger.info(f"Starting streaming for {len(messages)} messages in conversation")
+        
+        # Format using enhanced template system
+        formatted_prompt = self._format_multi_turn_prompt(messages)
+        
+        # Get appropriate stop tokens
+        stop_tokens = self._get_stop_tokens_for_model()
+        
         start_time = time.time()
         token_count = 0
         
         try:
-            # Direct streaming with speed optimizations
-            # Use appropriate stop tokens based on model type
-            stop_tokens = ["<|eot_id|>", "<|start_header_id|>", "<|end_header_id|>"] if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()) else ["<|im_end|>", "<|im_start|>"]
             
             stream = self.model.create_completion(
                 prompt=formatted_prompt,

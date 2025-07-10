@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import Optional, Dict, Any, List
 from enum import Enum
 import time
@@ -11,14 +11,49 @@ class ModelType(str, Enum):
     OLLAMA = "ollama"
 
 
+class ChatMessage(BaseModel):
+    """Individual message in a conversation"""
+    role: str = Field(..., description="Message role: system, user, assistant")
+    content: str = Field(..., description="Message content", min_length=1)
+    
+    @validator('role')
+    def validate_role(cls, v):
+        if v not in ['system', 'user', 'assistant']:
+            raise ValueError('Role must be one of: system, user, assistant')
+        return v
+
+
 class GenerateRequest(BaseModel):
-    """Request schema for text generation"""
-    prompt: str = Field(..., description="Input text prompt", min_length=1)
+    """Enhanced request schema supporting both single prompts and multi-turn conversations"""
+    # Legacy support - single prompt
+    prompt: Optional[str] = Field(None, description="Single input text prompt (legacy mode)", min_length=1)
+    
+    # New multi-turn conversation support
+    messages: Optional[List[ChatMessage]] = Field(None, description="Multi-turn conversation messages")
+    
+    # Existing generation parameters
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
     top_p: float = Field(0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter")
     max_tokens: int = Field(512, ge=1, le=2048, description="Maximum tokens to generate")
     stop_sequences: Optional[List[str]] = Field(None, description="Stop sequences")
     stream: bool = Field(False, description="Enable streaming response")
+    
+    @validator('root', pre=False, skip_on_failure=True)
+    def validate_prompt_or_messages(cls, values):
+        """Ensure either prompt or messages is provided, but not both"""
+        prompt = values.get('prompt')
+        messages = values.get('messages')
+        
+        if not prompt and not messages:
+            raise ValueError("Either 'prompt' or 'messages' must be provided")
+        if prompt and messages:
+            raise ValueError("Provide either 'prompt' OR 'messages', not both")
+        
+        # Validate messages if provided
+        if messages and len(messages) == 0:
+            raise ValueError("Messages list cannot be empty")
+            
+        return values
 
 
 class GenerateResponse(BaseModel):

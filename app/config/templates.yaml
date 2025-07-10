@@ -1,0 +1,111 @@
+# Chat Template Configurations for Different Model Types
+# This configuration allows flexible prompt formatting without hard-coded templates
+
+templates:
+  # Llama 3.x family (3.0, 3.1, 3.2) - Official Instruct format
+  llama-3:
+    patterns: 
+      - "llama-3"
+      - "llama-3.1" 
+      - "llama-3.2"
+      - "llama3"
+    format:
+      conversation_start: "<|begin_of_text|>"
+      system_start: "<|start_header_id|>system<|end_header_id|>\n\n"
+      system_end: "<|eot_id|>"
+      user_start: "<|start_header_id|>user<|end_header_id|>\n\n"
+      user_end: "<|eot_id|>"
+      assistant_start: "<|start_header_id|>assistant<|end_header_id|>\n\n"
+      assistant_end: "<|eot_id|>"
+    stop_tokens: 
+      - "<|eot_id|>"
+      - "<|start_header_id|>"
+      - "<|end_header_id|>"
+    default_system_message: "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe."
+
+  # ChatML format - Used by many modern models (TinyDolphin, Phi-3, etc.)
+  chatml:
+    patterns:
+      - "tinydolphin"
+      - "phi-3"
+      - "phi3"
+      - "chatml"
+      - "default"
+    format:
+      system_start: "<|im_start|>system\n"
+      system_end: "<|im_end|>\n"
+      user_start: "<|im_start|>user\n"
+      user_end: "<|im_end|>\n"
+      assistant_start: "<|im_start|>assistant\n"
+      assistant_end: "<|im_end|>\n"
+    stop_tokens:
+      - "<|im_end|>"
+      - "<|im_start|>"
+    default_system_message: "You are a helpful AI assistant."
+
+  # Mistral/Mixtral format
+  mistral:
+    patterns:
+      - "mistral"
+      - "mixtral"
+    format:
+      system_start: ""
+      system_end: ""
+      user_start: "[INST] "
+      user_end: " [/INST]"
+      assistant_start: ""
+      assistant_end: "</s>"
+    stop_tokens:
+      - "</s>"
+      - "[INST]"
+      - "[/INST]"
+    default_system_message: ""
+
+  # Alpaca format - Common for fine-tuned models
+  alpaca:
+    patterns:
+      - "alpaca"
+      - "vicuna"
+    format:
+      system_start: "### System:\n"
+      system_end: "\n\n"
+      user_start: "### Human:\n"
+      user_end: "\n\n"
+      assistant_start: "### Assistant:\n"
+      assistant_end: "\n\n"
+    stop_tokens:
+      - "### Human:"
+      - "### System:"
+      - "### Assistant:"
+    default_system_message: "You are a helpful AI assistant."
+
+  # CodeLlama format
+  codellama:
+    patterns:
+      - "codellama"
+      - "code-llama"
+    format:
+      system_start: "[INST] "
+      system_end: " "
+      user_start: ""
+      user_end: " [/INST]"
+      assistant_start: ""
+      assistant_end: " "
+    stop_tokens:
+      - "[INST]"
+      - "[/INST]"
+    default_system_message: "You are a helpful coding assistant."
+
+# Template resolution order - first match wins
+resolution_order:
+  - "llama-3"
+  - "mistral" 
+  - "codellama"
+  - "alpaca"
+  - "chatml"  # Fallback for most models
+
+# Global settings
+settings:
+  fallback_template: "chatml"
+  max_context_length: 2048
+  default_system_message: "You are a helpful AI assistant." 
