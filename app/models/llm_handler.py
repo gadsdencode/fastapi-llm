@@ -610,7 +610,7 @@ class LLMHandler:
             raise RuntimeError(f"Text generation failed: {str(e)}")
     
     async def generate_stream(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
-        """Enhanced streaming generation supporting both single prompts and multi-turn conversations"""
+        """Enhanced streaming generation with improved stop token handling and error logging"""
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
@@ -627,12 +627,13 @@ class LLMHandler:
         
         # Get appropriate stop tokens
         stop_tokens = self._get_stop_tokens_for_model()
+        logger.debug(f"Using stop tokens: {stop_tokens}")
         
         start_time = time.time()
         token_count = 0
+        accumulated_text = ""  # Track full generated text for better stop token detection
         
         try:
-            
             stream = self.model.create_completion(
                 prompt=formatted_prompt,
                 max_tokens=request.max_tokens,
@@ -658,17 +659,30 @@ class LLMHandler:
                     
                     if delta:
                         token_count += 1
+                        accumulated_text += delta  # Accumulate text for better stop token detection
                         
                         current_time = time.time()
                         elapsed_time = current_time - start_time
                         tokens_per_second = token_count / elapsed_time if elapsed_time > 0 else 0
                         
-                        # Check if this is the final chunk
+                        # Improved completion detection - rely primarily on finish_reason
                         is_final = (
-                            finish_reason is not None or
-                            token_count >= request.max_tokens or
-                            any(stop in delta for stop in stop_tokens)
+                            finish_reason is not None or  # Primary: trust llama_cpp's finish_reason
+                            token_count >= request.max_tokens or  # Safety net: max tokens reached
+                            any(stop_token in accumulated_text for stop_token in stop_tokens)  # Fallback: check accumulated text
                         )
+                        
+                        # Log completion reason for debugging
+                        if is_final:
+                            if finish_reason:
+                                completion_reason = f"finish_reason={finish_reason}"
+                            elif token_count >= request.max_tokens:
+                                completion_reason = "max_tokens_reached"
+                            else:
+                                completion_reason = "stop_token_detected_in_accumulated_text"
+                            
+                            logger.info(f"Stream completion: {completion_reason}, tokens={token_count}, "
+                                      f"text_length={len(accumulated_text)}, elapsed={elapsed_time:.2f}s")
                         
                         yield StreamChunk(
                             delta=delta,
@@ -686,7 +700,10 @@ class LLMHandler:
                         await asyncio.sleep(0.001)
                         
         except Exception as e:
-            logger.error(f"Streaming generation failed: {str(e)}")
+            # Log partial output for debugging when generation fails mid-stream
+            partial_preview = accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text
+            logger.error(f"Streaming generation failed after {token_count} tokens and {time.time() - start_time:.2f}s. "
+                        f"Partial output: '{partial_preview}'. Error: {str(e)}")
             raise RuntimeError(f"Streaming generation failed: {str(e)}")
     
     def unload_model(self):

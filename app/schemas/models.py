@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from typing import Optional, Dict, Any, List
 from enum import Enum
 import time
@@ -16,7 +16,8 @@ class ChatMessage(BaseModel):
     role: str = Field(..., description="Message role: system, user, assistant")
     content: str = Field(..., description="Message content", min_length=1)
     
-    @validator('role')
+    @field_validator('role')
+    @classmethod
     def validate_role(cls, v):
         if v not in ['system', 'user', 'assistant']:
             raise ValueError('Role must be one of: system, user, assistant')
@@ -38,11 +39,11 @@ class GenerateRequest(BaseModel):
     stop_sequences: Optional[List[str]] = Field(None, description="Stop sequences")
     stream: bool = Field(False, description="Enable streaming response")
     
-    @validator('root', pre=False, skip_on_failure=True)
-    def validate_prompt_or_messages(cls, values):
+    @model_validator(mode='after')
+    def validate_prompt_or_messages(self):
         """Ensure either prompt or messages is provided, but not both"""
-        prompt = values.get('prompt')
-        messages = values.get('messages')
+        prompt = self.prompt
+        messages = self.messages
         
         if not prompt and not messages:
             raise ValueError("Either 'prompt' or 'messages' must be provided")
@@ -53,7 +54,7 @@ class GenerateRequest(BaseModel):
         if messages and len(messages) == 0:
             raise ValueError("Messages list cannot be empty")
             
-        return values
+        return self
 
 
 class GenerateResponse(BaseModel):
