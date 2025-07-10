@@ -257,22 +257,41 @@ class LLMHandler:
         env_batch = os.getenv("LLM_THREADS_BATCH")
         if env_main and env_batch:
             return int(env_main), int(env_batch)
+        
+        # AGGRESSIVE threading for 48-core Railway
         if cpu_count >= 48:
-            # Use 32 main, 20 batch threads for 48-core
-            return 32, 20
+            # Use 40 main, 24 batch threads for maximum speed
+            main_threads = 40
+            batch_threads = 24
+            logger.info(f"🚀 AGGRESSIVE MODE: Using {main_threads} main + {batch_threads} batch threads for 48-core Railway")
+            return main_threads, batch_threads
         elif cpu_count >= 32:
-            return 24, 12
+            return 28, 16
         else:
             return max(4, cpu_count // 2), max(2, cpu_count // 4)
 
     def _setup_cpu_optimization_env(self, optimal_threads: int) -> None:
-        """Set CPU optimization environment variables for Railway's 48-core deployment"""
+        """Set AGGRESSIVE CPU optimization for Railway's 48-core deployment"""
         env_threads = str(optimal_threads)
+        
+        # Standard thread settings
         os.environ['OMP_NUM_THREADS'] = env_threads
         os.environ['MKL_NUM_THREADS'] = env_threads  
         os.environ['OPENBLAS_NUM_THREADS'] = env_threads
         os.environ['VECLIB_MAXIMUM_THREADS'] = env_threads
-        logger.info(f"Set CPU optimization environment variables for Railway's 48-core deployment: {env_threads} threads")
+        
+        # AGGRESSIVE CPU optimization settings
+        os.environ['OMP_SCHEDULE'] = 'static'
+        os.environ['OMP_PROC_BIND'] = 'true'
+        os.environ['OMP_PLACES'] = 'cores'
+        os.environ['GOMP_CPU_AFFINITY'] = '0-47'  # Use all 48 cores
+        
+        # Memory optimization
+        os.environ['MALLOC_ARENA_MAX'] = '4'
+        os.environ['MALLOC_MMAP_THRESHOLD_'] = '131072'
+        os.environ['MALLOC_TRIM_THRESHOLD_'] = '131072'
+        
+        logger.info(f"🔥 AGGRESSIVE CPU optimization enabled: {env_threads} threads + CPU affinity + memory optimization")
 
     def _get_model_specific_config(self, model_name: str) -> dict:
         """Return model-specific config overrides for optimal speed"""
@@ -300,8 +319,11 @@ class LLMHandler:
             return ["Q4_K_S", "Q4_K_M", "Q3_K_M", "Q5_K_M"]
 
     def _get_adaptive_batch_config(self, optimal_threads: int) -> dict:
-        # Large batches for high-core
-        if optimal_threads >= 32:
+        """MASSIVE batch sizes for maximum throughput on 48-core systems"""
+        if optimal_threads >= 40:
+            # MASSIVE batches for 48-core Railway
+            return {"n_batch": 2048, "n_ubatch": 1024}
+        elif optimal_threads >= 32:
             return {"n_batch": 1024, "n_ubatch": 512}
         elif optimal_threads >= 16:
             return {"n_batch": 512, "n_ubatch": 256}
@@ -314,34 +336,51 @@ class LLMHandler:
         return min(required_context, int(os.getenv("LLM_MAX_CONTEXT", "4096")))
 
     def _get_base_llama_config(self, optimal_threads: int, optimal_batch_threads: int, model_name: str = "") -> Dict[str, Any]:
-        """Get base Llama config with all optimizations and model-specific overrides"""
-        # Safe memory settings for Railway
+        """Get base Llama config with AGGRESSIVE optimizations for speed"""
+        # AGGRESSIVE memory settings for maximum speed
         memory_settings = {
             "use_mmap": True,
-            "use_mlock": False,
-            "numa": False,
+            "use_mlock": False,  # Disabled for Railway
+            "numa": False,       # Disabled for Railway
             "offload_kqv": True,
             "mul_mat_q": True,
             "f16_kv": True,
+            # SPEED-FOCUSED additions
+            "rope_scaling": None,     # Disable RoPE scaling overhead
+            "embedding": False,       # Disable embedding mode
+            "flash_attn": True,       # Enable flash attention if available
         }
-        # Dynamic batch config
+        
+        # MASSIVE batch config for speed
         batch_config = self._get_adaptive_batch_config(optimal_threads)
+        
         # Model-specific overrides
         model_config = self._get_model_specific_config(model_name)
-        # Merge all configs
+        
+        # Base config with speed optimizations
         config = {
-            "n_ctx": 2048,  # Default, can be overridden per request
+            "n_ctx": int(os.getenv("LLM_MAX_CONTEXT", "4096")),  # Larger context for better throughput
             "n_threads": optimal_threads,
             "n_threads_batch": optimal_batch_threads,
             "n_gpu_layers": 0,
-            "verbose": True,
+            "verbose": False,  # Reduce logging overhead
             "seed": -1,
             "logits_all": False,
             "vocab_only": False,
+            # SPEED optimizations
+            "n_keep": 0,              # Don't keep tokens in context
+            "rope_freq_base": 10000.0,
+            "rope_freq_scale": 1.0,
         }
+        
         config.update(memory_settings)
         config.update(batch_config)
         config.update(model_config)
+        
+        # Log the aggressive configuration
+        logger.info(f"⚡ SPEED CONFIG: n_batch={config['n_batch']}, n_ubatch={config['n_ubatch']}, n_ctx={config['n_ctx']}")
+        logger.info(f"⚡ THREAD CONFIG: main={optimal_threads}, batch={optimal_batch_threads}")
+        
         return config
 
     async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False, preferred_quant: Optional[str] = None) -> bool:
