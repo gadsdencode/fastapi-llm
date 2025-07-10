@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ['openblas', 'cmake', 'gcc', 'git', 'make']
+aptPkgs = ['libopenblas-dev', 'build-essential', 'cmake', 'git']
 
 [phases.install]
 cmds = [
