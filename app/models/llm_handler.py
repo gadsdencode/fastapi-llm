@@ -592,10 +592,13 @@ class LLMHandler:
         """Convert legacy single prompt to message format"""
         system_message = self.template_manager.get_default_system_message(self.model_name or "")
         
-        return [
-            ChatMessage(role="system", content=system_message),
-            ChatMessage(role="user", content=prompt)
-        ]
+        messages = []
+        # Only include system message if it has content
+        if system_message and system_message.strip():
+            messages.append(ChatMessage(role="system", content=system_message))
+        
+        messages.append(ChatMessage(role="user", content=prompt))
+        return messages
     
     def _get_stop_tokens_for_model(self) -> List[str]:
         """Get appropriate stop tokens for the current model including EOS token"""

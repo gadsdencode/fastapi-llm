@@ -14,7 +14,7 @@ class ModelType(str, Enum):
 class ChatMessage(BaseModel):
     """Individual message in a conversation"""
     role: str = Field(..., description="Message role: system, user, assistant")
-    content: str = Field(..., description="Message content", min_length=1)
+    content: str = Field(..., description="Message content")
     
     @field_validator('role')
     @classmethod
@@ -22,6 +22,13 @@ class ChatMessage(BaseModel):
         if v not in ['system', 'user', 'assistant']:
             raise ValueError('Role must be one of: system, user, assistant')
         return v
+    
+    @model_validator(mode='after')
+    def validate_content_by_role(self):
+        """Allow empty content for system messages, but require content for user/assistant"""
+        if self.role in ['user', 'assistant'] and len(self.content.strip()) == 0:
+            raise ValueError(f'{self.role} messages must have non-empty content')
+        return self
 
 
 class GenerateRequest(BaseModel):
