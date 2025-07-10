@@ -265,6 +265,15 @@ class LLMHandler:
         else:
             return max(4, cpu_count // 2), max(2, cpu_count // 4)
 
+    def _setup_cpu_optimization_env(self, optimal_threads: int) -> None:
+        """Set CPU optimization environment variables for Railway's 48-core deployment"""
+        env_threads = str(optimal_threads)
+        os.environ['OMP_NUM_THREADS'] = env_threads
+        os.environ['MKL_NUM_THREADS'] = env_threads  
+        os.environ['OPENBLAS_NUM_THREADS'] = env_threads
+        os.environ['VECLIB_MAXIMUM_THREADS'] = env_threads
+        logger.info(f"Set CPU optimization environment variables for Railway's 48-core deployment: {env_threads} threads")
+
     def _get_model_specific_config(self, model_name: str) -> dict:
         """Return model-specific config overrides for optimal speed"""
         config = {}
