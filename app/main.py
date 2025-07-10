@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 from contextlib import asynccontextmanager
+import httpx
 
 # Environment optimizations for CPU inference
 os.environ["OMP_NUM_THREADS"] = str(os.cpu_count())
@@ -46,6 +47,12 @@ async def lifespan(app: FastAPI):
     logger.info("Starting FastAPI LLM Inference Server")
     logger.info(f"Model: {MODEL_NAME} (Type: {MODEL_TYPE})")
     logger.info(f"Load on startup: {LOAD_MODEL_ON_STARTUP}")
+
+    # Create a global HTTPX async client with connection pooling
+    app.state.http_client = httpx.AsyncClient(
+        limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+        timeout=30.0
+    )
     
     # Load model on startup if configured
     if LOAD_MODEL_ON_STARTUP:
@@ -62,6 +69,8 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down FastAPI LLM Inference Server")
+    # Properly close the HTTPX client
+    await app.state.http_client.aclose()
 
 
 # Create FastAPI app

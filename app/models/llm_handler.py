@@ -250,119 +250,120 @@ class LLMHandler:
             }
         }
     
-    def _get_optimal_threads(self, cpu_count: int) -> Tuple[int, int]:
-        """Calculate optimal thread counts for CPU inference
-        
-        Research-based optimization: Use 50-75% of cores for high-core systems
-        MoE models can handle higher thread counts due to parallel expert architecture
-        
-        Args:
-            cpu_count: Number of available CPU cores
-            
-        Returns:
-            Tuple of (optimal_threads, optimal_batch_threads)
-        """
-        if cpu_count >= 32:  # High-core system (Railway 48-core)
-            optimal_threads = int(cpu_count * 0.67)  # 67% of cores (32 threads for 48 cores)
-            optimal_batch_threads = int(cpu_count * 0.42)  # 42% for batch (20 threads for 48 cores)
-        else:  # Fallback for smaller systems
-            optimal_threads = max(4, cpu_count // 2)
-            optimal_batch_threads = max(2, optimal_threads // 2)
-        
-        logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads (batch: {optimal_batch_threads}) for high-performance inference")
-        return optimal_threads, optimal_batch_threads
-    
-    def _setup_cpu_optimization_env(self, optimal_threads: int) -> None:
-        """Set CPU optimization environment variables for Railway's 48-core deployment"""
-        env_threads = str(optimal_threads)
-        os.environ['OMP_NUM_THREADS'] = env_threads
-        os.environ['MKL_NUM_THREADS'] = env_threads  
-        os.environ['OPENBLAS_NUM_THREADS'] = env_threads
-        os.environ['VECLIB_MAXIMUM_THREADS'] = env_threads
-        logger.info(f"Set CPU optimization environment variables for Railway's 48-core deployment: {env_threads} threads")
-    
-    def _get_base_llama_config(self, optimal_threads: int, optimal_batch_threads: int) -> Dict[str, Any]:
-        """Get base Llama configuration with optimized performance settings
-        
-        OPTIMIZED Performance Settings (based on extensive research):
-        1. Thread Count: Fewer threads (4-6) perform better than many threads for CPU inference
-        2. Batch Processing: Separate n_threads_batch (4) and smaller batches (256/128) for CPU
-        3. Context Window: Conservative 2048 for Railway memory constraints
-        4. KV Cache: Use stable F16 (no experimental quantization)
-        5. Memory Mapping: Enabled for faster model loading
-        6. CPU-Specific: Optimized for Railway's 48-core environment with conservative threading
-        
-        Args:
-            optimal_threads: Optimized thread count for inference
-            optimal_batch_threads: Optimized thread count for batch processing
-            
-        Returns:
-            Dictionary of base Llama configuration parameters
-        """
-        return {
-            "n_ctx": 2048,  # Conservative context size for Railway memory limits
-            "n_threads": optimal_threads,  # Optimized thread count
-            "n_threads_batch": optimal_batch_threads,  # Separate batch processing threads
-            "n_gpu_layers": 0,  # CPU-only for Railway
-            "use_mmap": True,  # Enable memory mapping for faster loading
-            "use_mlock": False,  # Disable memory locking for Railway compatibility
-            "verbose": True,  # Reduce log noise
-            "n_batch": 512,  # Larger batch size for high-core systems  
-            "n_ubatch": 256,  # Larger micro-batch for 48-core optimization
-            "seed": -1,  # Random seed
-            # OPTIMIZED CPU performance settings:
-            "rope_freq_base": 10000.0,  # Standard RoPE frequency
-            "rope_freq_scale": 1.0,  # No frequency scaling
-            "mul_mat_q": True,  # Enable quantized matrix multiplication
-            "f16_kv": True,  # Use F16 for KV cache (stable default)
-            "logits_all": False,  # Only compute necessary logits
-            "vocab_only": False,  # Load full model
-            "numa": False,  # Disable NUMA for Railway
-            "offload_kqv": True,  # Optimize KQV operations
+    def _get_optimal_threads(self, cpu_count: int, model_name: str = "") -> Tuple[int, int]:
+        """High-core aware threading: maximize parallelism for 48-core Railway"""
+        # Allow env overrides for advanced users
+        env_main = os.getenv("LLM_THREADS_MAIN")
+        env_batch = os.getenv("LLM_THREADS_BATCH")
+        if env_main and env_batch:
+            return int(env_main), int(env_batch)
+        if cpu_count >= 48:
+            # Use 32 main, 20 batch threads for 48-core
+            return 32, 20
+        elif cpu_count >= 32:
+            return 24, 12
+        else:
+            return max(4, cpu_count // 2), max(2, cpu_count // 4)
+
+    def _get_model_specific_config(self, model_name: str) -> dict:
+        """Return model-specific config overrides for optimal speed"""
+        config = {}
+        if "tinydolphin" in model_name.lower():
+            config.update({
+                "rope_freq_base": 1000000.0,
+                "n_batch": 256,
+                "n_ubatch": 128,
+            })
+        elif "llama-3" in model_name.lower():
+            config.update({
+                "rope_freq_base": 10000.0,
+                "n_batch": 512,
+                "n_ubatch": 256,
+            })
+        return config
+
+    def _get_speed_optimized_quantization(self, model_name: str) -> list:
+        if "tinydolphin" in model_name.lower():
+            return ["Q3_K_M", "Q4_K_S", "Q4_K_M", "Q5_K_M"]
+        elif "llama-3" in model_name.lower():
+            return ["Q8_0", "Q4_K_M", "Q5_K_M", "Q4_K_S", "Q4_0"]
+        else:
+            return ["Q4_K_S", "Q4_K_M", "Q3_K_M", "Q5_K_M"]
+
+    def _get_adaptive_batch_config(self, optimal_threads: int) -> dict:
+        # Large batches for high-core
+        if optimal_threads >= 32:
+            return {"n_batch": 1024, "n_ubatch": 512}
+        elif optimal_threads >= 16:
+            return {"n_batch": 512, "n_ubatch": 256}
+        else:
+            return {"n_batch": 256, "n_ubatch": 128}
+
+    def _get_optimal_context_size(self, prompt_length: int, max_tokens: int) -> int:
+        # Allow up to 4096 for high-memory systems
+        required_context = prompt_length + max_tokens + 100
+        return min(required_context, int(os.getenv("LLM_MAX_CONTEXT", "4096")))
+
+    def _get_base_llama_config(self, optimal_threads: int, optimal_batch_threads: int, model_name: str = "") -> Dict[str, Any]:
+        """Get base Llama config with all optimizations and model-specific overrides"""
+        # Safe memory settings for Railway
+        memory_settings = {
+            "use_mmap": True,
+            "use_mlock": False,
+            "numa": False,
+            "offload_kqv": True,
+            "mul_mat_q": True,
+            "f16_kv": True,
         }
+        # Dynamic batch config
+        batch_config = self._get_adaptive_batch_config(optimal_threads)
+        # Model-specific overrides
+        model_config = self._get_model_specific_config(model_name)
+        # Merge all configs
+        config = {
+            "n_ctx": 2048,  # Default, can be overridden per request
+            "n_threads": optimal_threads,
+            "n_threads_batch": optimal_batch_threads,
+            "n_gpu_layers": 0,
+            "verbose": True,
+            "seed": -1,
+            "logits_all": False,
+            "vocab_only": False,
+        }
+        config.update(memory_settings)
+        config.update(batch_config)
+        config.update(model_config)
+        return config
 
     async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False, preferred_quant: Optional[str] = None) -> bool:
-        """Load a model based on type with RESEARCH-BASED performance optimizations"""
         if self.is_loaded() and self.model_name == model_name and not force_reload:
             logger.info(f"Model {model_name} already loaded")
             return True
-        
-        # Optimize CPU threads for Railway's 48-core deployment
         cpu_count = os.cpu_count() or 48
-        optimal_threads, optimal_batch_threads = self._get_optimal_threads(cpu_count)
+        optimal_threads, optimal_batch_threads = self._get_optimal_threads(cpu_count, model_name)
         self._setup_cpu_optimization_env(optimal_threads)
-        
         logger.info(f"Loading model: {model_name} (type: {model_type})")
         start_time = time.time()
-        
         try:
-            # Get base configuration for Llama initialization
-            base_config = self._get_base_llama_config(optimal_threads, optimal_batch_threads)
-            
-            # Determine model path based on type
+            base_config = self._get_base_llama_config(optimal_threads, optimal_batch_threads, model_name)
+            # Use aggressive quantization preferences
+            quant_prefs = self._get_speed_optimized_quantization(model_name)
             if model_type == ModelType.GGUF or "/" in model_name:
-                model_path = await self._download_gguf_model(model_name, preferred_quant)
+                model_path = await self._download_gguf_model(model_name, preferred_quant or quant_prefs[0])
             else:
                 model_path = model_name
                 logger.info(f"Loading local model from path: {model_name}")
-            
-            # Load the model with optimized configuration
             logger.info(f"Loading model from path: {model_path}")
             self.model = Llama(
                 model_path=model_path,
                 **base_config
             )
-            
             self.model_name = model_name
             self.model_type = model_type
             self.load_time = time.time() - start_time
-            
-            # Try to load tokenizer for Hugging Face chat template integration
             await self._load_tokenizer(model_name)
-            
             logger.info(f"Model loaded successfully in {self.load_time:.2f}s")
             return True
-            
         except Exception as e:
             error_msg = f"Failed to load model {model_name}: {str(e)}"
             logger.error(error_msg)
@@ -408,22 +409,13 @@ class LLMHandler:
             for group in file_groups:
                 logger.info(f"  - {group.base_name}: {group.quantization} ({'split' if group.is_split else 'single'}, {len(group.files)} files)")
             
-            # Define model-specific quantization preferences
-            if "llama-3.2" in model_name.lower() or "llama-3" in model_name.lower():
-                # For Llama 3.2/3.x, prioritize Q8_0 for accuracy, then Q4_K_M for speed
-                model_preferences = ["Q8_0", "Q4_K_M", "Q5_K_M", "Q4_K_S", "Q4_0"]
-            elif "wizard-vicuna" in model_name.lower() or "vicuna" in model_name.lower():
-                # For Wizard-Vicuna models, prioritize Q4_K_M for optimal speed/quality balance on 7B models
-                model_preferences = ["Q4_K_M", "Q5_K_M", "Q4_K_S", "Q6_K", "Q8_0", "Q4_0"]
-            else:
-                # For other models, prioritize Q4_K_M for speed/quality balance
-                model_preferences = ["Q4_K_M", "Q4_K_S", "Q4_0", "Q3_K_M", "Q5_K_M", "Q8_0"]
-            
+            # Use aggressive quantization preferences
+            quant_prefs = self._get_speed_optimized_quantization(model_name)
             # Select the best file group based on preferences
             selected_group = GGUFFileHandler.select_best_group(
                 file_groups, 
                 preferred_quant=preferred_quant,
-                model_preferences=model_preferences
+                model_preferences=quant_prefs
             )
             
             if not selected_group:
@@ -743,6 +735,7 @@ class LLMHandler:
                 mirostat_eta=request.mirostat_eta
             )
             
+            chunk_buffer = []
             for output in stream:
                 if 'choices' in output and len(output['choices']) > 0:
                     choice = output['choices'][0]
@@ -774,20 +767,26 @@ class LLMHandler:
                             logger.info(f"Stream completion: {completion_reason}, tokens={token_count}, "
                                       f"elapsed={elapsed_time:.2f}s")
                         
-                        yield StreamChunk(
+                        chunk_buffer.append(StreamChunk(
                             delta=delta,
                             tokens_generated=token_count,
                             generation_time=elapsed_time,
                             tokens_per_second=tokens_per_second,
                             is_final=is_final
-                        )
+                        ))
+                        
+                        # Batch yield for performance
+                        if len(chunk_buffer) >= 3 or is_final:
+                            for chunk in chunk_buffer:
+                                yield chunk
+                            chunk_buffer = []
                         
                         # Break if this was the final chunk
                         if is_final:
                             break
                             
                         # Allow other coroutines to run
-                        await asyncio.sleep(0.001)
+                        await asyncio.sleep(0.0001)  # Faster streaming
                         
         except Exception as e:
             # Log error information for debugging when generation fails mid-stream
