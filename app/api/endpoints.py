@@ -119,12 +119,7 @@ async def generate_text(
             )
         
         # Check cache first for identical requests
-        cache_key = f"cache:{get_cache_key(
-            generate_request.prompt,
-            generate_request.max_tokens,
-            generate_request.temperature,
-            generate_request.top_p
-        )}"
+        cache_key = f"cache:{get_cache_key(generate_request.prompt, generate_request.max_tokens, generate_request.temperature, generate_request.top_p)}"
         cached_response = await get_cached_response(cache_key)
         if cached_response:
             logger.info(f"Returning cached response for key: {cache_key[:16]}")
