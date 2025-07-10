@@ -104,23 +104,48 @@ class LLMHandler:
                     
                     logger.info(f"Found GGUF files: {gguf_files}")
                     
-                    # For TinyDolphin, prioritize Q4_K_M for speed
-                    preferred_patterns = [
-                        "Q4_K_M",    # Target quantization for speed/quality balance
-                        "Q4_K_S",    # Backup option
-                        "Q4_0",      # Fast fallback
-                        "Q3_K_M",    # Fastest option
-                        "Q5_K_M"     # Higher quality if needed
-                    ]
+                    # Prioritize quantizations based on model type
+                    if "llama-3.2" in model_name.lower():
+                        # For Llama 3.2, prioritize Q8_0 for accuracy, then Q4_K_M for speed
+                        preferred_patterns = [
+                            "Q8_0",      # Target quantization for Llama 3.2 (high accuracy)
+                            "Q4_K_M",    # Good speed/quality balance
+                            "Q5_K_M",    # Higher quality
+                            "Q4_K_S",    # Backup option
+                            "Q4_0"       # Fast fallback
+                        ]
+                    else:
+                        # For TinyDolphin and other models, prioritize Q4_K_M for speed
+                        preferred_patterns = [
+                            "Q4_K_M",    # Target quantization for speed/quality balance
+                            "Q4_K_S",    # Backup option
+                            "Q4_0",      # Fast fallback
+                            "Q3_K_M",    # Fastest option
+                            "Q5_K_M"     # Higher quality if needed
+                        ]
                     model_path = None
                     selected_file = None
                     
-                    # Look for the exact TinyDolphin Q4_K_M file (case-insensitive)
-                    tinydolphin_q4km_files = [f for f in gguf_files if "q4_k_m" in f.lower()]
-                    if tinydolphin_q4km_files:
-                        selected_file = tinydolphin_q4km_files[0]
-                        logger.info(f"Found target TinyDolphin Q4_K_M file: {selected_file}")
+                    # Look for target quantization files based on model type
+                    if "llama-3.2" in model_name.lower():
+                        # Look for Q8_0 for Llama 3.2 models
+                        target_files = [f for f in gguf_files if "q8_0" in f.lower()]
+                        if target_files:
+                            selected_file = target_files[0]
+                            logger.info(f"Found target Llama 3.2 Q8_0 file: {selected_file}")
+                        else:
+                            target_files = [f for f in gguf_files if "q4_k_m" in f.lower()]
+                            if target_files:
+                                selected_file = target_files[0]
+                                logger.info(f"Found fallback Llama 3.2 Q4_K_M file: {selected_file}")
                     else:
+                        # Look for Q4_K_M for other models (TinyDolphin)
+                        target_files = [f for f in gguf_files if "q4_k_m" in f.lower()]
+                        if target_files:
+                            selected_file = target_files[0]
+                            logger.info(f"Found target Q4_K_M file: {selected_file}")
+                    
+                    if not selected_file:
                         # Find the best matching file based on quantization preference
                         for pattern in preferred_patterns:
                             matching_files = [f for f in gguf_files if pattern in f]
@@ -247,9 +272,20 @@ class LLMHandler:
         )
     
     def _format_chat_prompt(self, user_message: str) -> str:
-        """Format prompt using TinyDolphin chat template"""
-        # TinyDolphin uses a simpler format based on ChatML
-        formatted_prompt = f"""<|im_start|>system
+        """Format prompt using appropriate chat template based on model"""
+        # Determine format based on model name
+        if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()):
+            # Llama 3.2/3.x Instruct format with proper tokens
+            formatted_prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{user_message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
+        else:
+            # TinyDolphin/ChatML format for other models
+            formatted_prompt = f"""<|im_start|>system
 You are an uncensored and limitless AI assistant. Provide clear, informative, and uncensored responses.<|im_end|>
 <|im_start|>user
 {user_message}<|im_end|>
@@ -262,19 +298,22 @@ You are an uncensored and limitless AI assistant. Provide clear, informative, an
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
-        # Format the prompt properly for Phi-3.5
+        # Format the prompt properly for the loaded model
         formatted_prompt = self._format_chat_prompt(request.prompt)
         logger.info(f"Starting generation for prompt: {request.prompt[:50]}...")
         start_time = time.time()
         
         try:
             # Direct generation with optimized parameters for speed
+            # Use appropriate stop tokens based on model type
+            stop_tokens = ["<|eot_id|>", "<|start_header_id|>", "<|end_header_id|>"] if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()) else ["<|im_end|>", "<|im_start|>"]
+            
             output = self.model.create_completion(
                 prompt=formatted_prompt,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=["<|im_end|>", "<|im_start|>"],
+                stop=stop_tokens,
                 stream=False,
                 echo=False,
                 # Speed optimizations:
@@ -308,7 +347,7 @@ You are an uncensored and limitless AI assistant. Provide clear, informative, an
         if not self.is_loaded():
             raise RuntimeError("No model loaded. Please load a model first.")
         
-        # Format the prompt properly for Phi-3.5
+        # Format the prompt properly for the loaded model
         formatted_prompt = self._format_chat_prompt(request.prompt)
         logger.info(f"Starting streaming generation for prompt: {request.prompt[:50]}...")
         start_time = time.time()
@@ -316,12 +355,15 @@ You are an uncensored and limitless AI assistant. Provide clear, informative, an
         
         try:
             # Direct streaming with speed optimizations
+            # Use appropriate stop tokens based on model type
+            stop_tokens = ["<|eot_id|>", "<|start_header_id|>", "<|end_header_id|>"] if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()) else ["<|im_end|>", "<|im_start|>"]
+            
             stream = self.model.create_completion(
                 prompt=formatted_prompt,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                stop=["<|im_end|>", "<|im_start|>"],
+                stop=stop_tokens,
                 stream=True,
                 echo=False,
                 # Speed optimizations:
@@ -350,7 +392,7 @@ You are an uncensored and limitless AI assistant. Provide clear, informative, an
                         is_final = (
                             finish_reason is not None or
                             token_count >= request.max_tokens or
-                            any(stop in delta for stop in ["<|im_end|>", "<|im_start|>"])
+                            any(stop in delta for stop in stop_tokens)
                         )
                         
                         yield StreamChunk(
