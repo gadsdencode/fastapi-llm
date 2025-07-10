@@ -251,47 +251,67 @@ class LLMHandler:
         }
     
     def _get_optimal_threads(self, cpu_count: int, model_name: str = "") -> Tuple[int, int]:
-        """High-core aware threading: maximize parallelism for 48-core Railway"""
+        """Memory-bandwidth-optimized threading: CPU inference is memory-bound, not CPU-bound"""
         # Allow env overrides for advanced users
         env_main = os.getenv("LLM_THREADS_MAIN")
         env_batch = os.getenv("LLM_THREADS_BATCH")
         if env_main and env_batch:
             return int(env_main), int(env_batch)
         
-        # AGGRESSIVE threading for 48-core Railway
-        if cpu_count >= 48:
-            # Use 40 main, 24 batch threads for maximum speed
-            main_threads = 40
-            batch_threads = 24
-            logger.info(f"🚀 AGGRESSIVE MODE: Using {main_threads} main + {batch_threads} batch threads for 48-core Railway")
-            return main_threads, batch_threads
-        elif cpu_count >= 32:
-            return 28, 16
+        # MEMORY-OPTIMIZED threading (research shows 8-16 threads optimal)
+        # More threads = memory bandwidth contention = slower inference
+        if cpu_count >= 32:
+            # Conservative: 12 main, 6 batch threads for memory efficiency
+            main_threads = 12
+            batch_threads = 6
+        elif cpu_count >= 16:
+            main_threads = 8
+            batch_threads = 4
         else:
-            return max(4, cpu_count // 2), max(2, cpu_count // 4)
+            main_threads = max(4, cpu_count // 2)
+            batch_threads = max(2, cpu_count // 4)
+        
+        logger.info(f"🧠 Memory-optimized threading: {main_threads} main, {batch_threads} batch (CPU count: {cpu_count})")
+        return main_threads, batch_threads
 
-    def _setup_cpu_optimization_env(self, optimal_threads: int) -> None:
-        """Set AGGRESSIVE CPU optimization for Railway's 48-core deployment"""
-        env_threads = str(optimal_threads)
+    def _get_adaptive_batch_config(self, cpu_count: int, model_name: str = "") -> Tuple[int, int]:
+        """Memory-efficient batch sizes: research shows 32-128 optimal, NOT 2048+"""
+        # Research findings: batch_size=32 was optimal in real testing
+        # Large batches cause memory pressure and cache misses
         
-        # Standard thread settings
-        os.environ['OMP_NUM_THREADS'] = env_threads
-        os.environ['MKL_NUM_THREADS'] = env_threads  
-        os.environ['OPENBLAS_NUM_THREADS'] = env_threads
-        os.environ['VECLIB_MAXIMUM_THREADS'] = env_threads
+        if cpu_count >= 32:
+            # Conservative batching for memory efficiency
+            n_batch = 128      # Was 2048 - TOO LARGE!
+            n_ubatch = 64      # Was 1024 - TOO LARGE!
+        elif cpu_count >= 16:
+            n_batch = 64
+            n_ubatch = 32
+        else:
+            n_batch = 32
+            n_ubatch = 16
         
-        # AGGRESSIVE CPU optimization settings
-        os.environ['OMP_SCHEDULE'] = 'static'
-        os.environ['OMP_PROC_BIND'] = 'true'
-        os.environ['OMP_PLACES'] = 'cores'
-        os.environ['GOMP_CPU_AFFINITY'] = '0-47'  # Use all 48 cores
+        logger.info(f"🚀 Memory-efficient batching: n_batch={n_batch}, n_ubatch={n_ubatch}")
+        return n_batch, n_ubatch
+
+    def _setup_cpu_optimization_env(self, optimal_threads: int):
+        """Memory-focused CPU optimization: remove aggressive settings that hurt performance"""
+        logger.info(f"🔧 Setting up MEMORY-OPTIMIZED CPU environment with {optimal_threads} threads")
         
-        # Memory optimization
-        os.environ['MALLOC_ARENA_MAX'] = '4'
-        os.environ['MALLOC_MMAP_THRESHOLD_'] = '131072'
-        os.environ['MALLOC_TRIM_THRESHOLD_'] = '131072'
+        # Set conservative threading for math libraries
+        os.environ["OMP_NUM_THREADS"] = str(optimal_threads)
+        os.environ["MKL_NUM_THREADS"] = str(optimal_threads)
+        os.environ["OPENBLAS_NUM_THREADS"] = str(optimal_threads)
+        os.environ["VECLIB_MAXIMUM_THREADS"] = str(optimal_threads)
         
-        logger.info(f"🔥 AGGRESSIVE CPU optimization enabled: {env_threads} threads + CPU affinity + memory optimization")
+        # REMOVED: Aggressive CPU affinity (causes scheduling overhead)
+        # REMOVED: Static scheduling (let OS decide)
+        # REMOVED: Memory binding (can hurt performance on shared systems)
+        
+        # Keep only memory-friendly optimizations
+        os.environ["OMP_WAIT_POLICY"] = "PASSIVE"  # Don't spin-wait, save CPU
+        os.environ["MKL_DYNAMIC"] = "FALSE"        # Consistent thread count
+        
+        logger.info("✅ Memory-optimized CPU environment configured")
 
     def _get_model_specific_config(self, model_name: str) -> dict:
         """Return model-specific config overrides for optimal speed"""
@@ -318,18 +338,6 @@ class LLMHandler:
         else:
             return ["Q4_K_S", "Q4_K_M", "Q3_K_M", "Q5_K_M"]
 
-    def _get_adaptive_batch_config(self, optimal_threads: int) -> dict:
-        """MASSIVE batch sizes for maximum throughput on 48-core systems"""
-        if optimal_threads >= 40:
-            # MASSIVE batches for 48-core Railway
-            return {"n_batch": 2048, "n_ubatch": 1024}
-        elif optimal_threads >= 32:
-            return {"n_batch": 1024, "n_ubatch": 512}
-        elif optimal_threads >= 16:
-            return {"n_batch": 512, "n_ubatch": 256}
-        else:
-            return {"n_batch": 256, "n_ubatch": 128}
-
     def _get_optimal_context_size(self, prompt_length: int, max_tokens: int) -> int:
         # Allow up to 4096 for high-memory systems
         required_context = prompt_length + max_tokens + 100
@@ -351,8 +359,9 @@ class LLMHandler:
             "flash_attn": True,       # Enable flash attention if available
         }
         
-        # MASSIVE batch config for speed
-        batch_config = self._get_adaptive_batch_config(optimal_threads)
+        # Memory-efficient batch config
+        n_batch, n_ubatch = self._get_adaptive_batch_config(os.cpu_count() or 48, model_name)
+        batch_config = {"n_batch": n_batch, "n_ubatch": n_ubatch}
         
         # Model-specific overrides
         model_config = self._get_model_specific_config(model_name)
@@ -377,9 +386,9 @@ class LLMHandler:
         config.update(batch_config)
         config.update(model_config)
         
-        # Log the aggressive configuration
-        logger.info(f"⚡ SPEED CONFIG: n_batch={config['n_batch']}, n_ubatch={config['n_ubatch']}, n_ctx={config['n_ctx']}")
-        logger.info(f"⚡ THREAD CONFIG: main={optimal_threads}, batch={optimal_batch_threads}")
+        # Log the memory-optimized configuration
+        logger.info(f"🧠 MEMORY-OPTIMIZED CONFIG: n_batch={config['n_batch']}, n_ubatch={config['n_ubatch']}, n_ctx={config['n_ctx']}")
+        logger.info(f"🧠 THREAD CONFIG: main={optimal_threads}, batch={optimal_batch_threads}")
         
         return config
 
