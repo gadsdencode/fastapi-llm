@@ -75,7 +75,6 @@ class LLMHandler:
                 # Use huggingface_hub to download GGUF files
                 from huggingface_hub import hf_hub_download
                 import tempfile
-                import os
                 
                 # Optimize CPU threads for Railway (typically 2-4 vCPUs)
                 cpu_count = os.cpu_count() or 4
