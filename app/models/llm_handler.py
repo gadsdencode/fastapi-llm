@@ -846,14 +846,85 @@ class LLMHandler:
                             break
                             
                         # Allow other coroutines to run
-                        await asyncio.sleep(0.0001)  # Faster streaming
+                        await asyncio.sleep(0.001)  # Reduced sleep for faster streaming
                         
         except Exception as e:
-            # Log error information for debugging when generation fails mid-stream
-            elapsed_time = time.time() - start_time
-            logger.error(f"Streaming generation failed after {token_count} tokens and {elapsed_time:.2f}s. "
-                        f"Error: {str(e)}")
+            logger.error(f"Streaming generation failed: {str(e)}")
+            # Yield an error chunk
+            yield StreamChunk(
+                delta="",
+                tokens_generated=token_count,
+                generation_time=time.time() - start_time,
+                tokens_per_second=0,
+                is_final=True
+            )
             raise RuntimeError(f"Streaming generation failed: {str(e)}")
+
+    def generate_sync(self, request: GenerateRequest) -> GenerateResponse:
+        """Synchronous wrapper for generate method - used with asyncio.to_thread()"""
+        import asyncio
+        try:
+            # Run the async method in the current thread's event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(self.generate(request))
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"Sync generation failed: {str(e)}")
+            raise RuntimeError(f"Sync generation failed: {str(e)}")
+
+    async def generate_stream_async(self, request: GenerateRequest) -> AsyncIterator[StreamChunk]:
+        """Thread-pool compatible async streaming method"""
+        import asyncio
+        
+        # Create a queue to pass chunks between thread and async context
+        chunk_queue = asyncio.Queue()
+        
+        def stream_in_thread():
+            """Run streaming in a separate thread"""
+            try:
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                async def collect_chunks():
+                    async for chunk in self.generate_stream(request):
+                        await chunk_queue.put(chunk)
+                    await chunk_queue.put(None)  # Signal completion
+                
+                loop.run_until_complete(collect_chunks())
+                loop.close()
+                
+            except Exception as e:
+                # Put error in queue
+                asyncio.create_task(chunk_queue.put(e))
+        
+        # Start streaming in thread pool
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(stream_in_thread)
+            
+            # Yield chunks as they arrive
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(chunk_queue.get(), timeout=30.0)
+                    if chunk is None:  # End signal
+                        break
+                    elif isinstance(chunk, Exception):  # Error
+                        raise chunk
+                    else:
+                        yield chunk
+                except asyncio.TimeoutError:
+                    logger.error("Streaming timeout - breaking")
+                    break
+            
+            # Ensure thread completes
+            try:
+                future.result(timeout=1.0)
+            except:
+                pass
     
     def unload_model(self):
         """Unload the current model to free memory"""

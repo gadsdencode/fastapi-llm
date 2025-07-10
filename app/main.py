@@ -16,12 +16,14 @@ if os.getenv("RAILWAY_ENVIRONMENT"):
     os.environ["MALLOC_TRIM_THRESHOLD_"] = "100000"
     os.environ["MALLOC_MMAP_THRESHOLD_"] = "131072"
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.base import BaseHTTPMiddleware
 
 from app.api.endpoints import router, limiter
 from app.models.llm_handler import llm_handler
@@ -48,10 +50,21 @@ async def lifespan(app: FastAPI):
     logger.info(f"Model: {MODEL_NAME} (Type: {MODEL_TYPE})")
     logger.info(f"Load on startup: {LOAD_MODEL_ON_STARTUP}")
 
-    # Create a global HTTPX async client with connection pooling
+    # Create a global HTTPX async client with OPTIMIZED connection pooling
     app.state.http_client = httpx.AsyncClient(
-        limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
-        timeout=30.0
+        limits=httpx.Limits(
+            max_keepalive_connections=50,    # Increased keepalive connections
+            max_connections=200,             # Increased max connections
+            keepalive_expiry=30.0           # Keep connections alive for 30s
+        ),
+        timeout=httpx.Timeout(
+            connect=10.0,    # Connection timeout
+            read=60.0,       # Read timeout for LLM responses
+            write=10.0,      # Write timeout
+            pool=5.0         # Pool timeout
+        ),
+        http2=True,          # Enable HTTP/2 for better performance
+        follow_redirects=True
     )
     
     # Load model on startup if configured
@@ -83,14 +96,31 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
+# Add CORS middleware with optimized settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure appropriately for production
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],  # Limit to needed methods
     allow_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Add GZip compression middleware for faster responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Add performance headers middleware
+class PerformanceMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Add performance headers
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Server"] = "FastAPI-LLM"
+        return response
+
+app.add_middleware(PerformanceMiddleware)
 
 # Add rate limiting
 app.state.limiter = limiter
@@ -145,11 +175,36 @@ if __name__ == "__main__":
     
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
+    workers = int(os.getenv("WORKERS", "1"))  # Default single worker, set via env
     
-    uvicorn.run(
-        "app.main:app",
-        host=host,
-        port=port,
-        reload=False,
-        log_level="info"
-    ) 
+    # For Railway deployment with 48 cores, consider:
+    # WORKERS=8-16 (conservative for shared environment)
+    # For local development, keep workers=1
+    
+    if workers > 1:
+        logger.info(f"Starting with {workers} workers for multi-core performance")
+        # Use gunicorn for multi-worker deployment
+        # Railway: set WORKERS=8 in environment variables
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            workers=workers,
+            reload=False,
+            log_level="info",
+            access_log=False,      # Disable access logs for performance
+            use_colors=False,      # Disable colors in production
+            loop="uvloop",         # Use faster event loop if available
+            http="httptools"       # Use faster HTTP parser if available
+        )
+    else:
+        # Single worker mode (development)
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            reload=False,
+            log_level="info",
+            loop="uvloop",         # Use faster event loop if available
+            http="httptools"       # Use faster HTTP parser if available
+        ) 

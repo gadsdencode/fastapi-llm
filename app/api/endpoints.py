@@ -36,9 +36,19 @@ security = HTTPBearer(auto_error=False)
 # API Key authentication
 API_KEY = os.getenv("API_KEY")
 
-# Redis connection setup
+# Redis connection setup with optimized pooling
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+# OPTIMIZED Redis client with connection pooling
+redis_client = redis.from_url(
+    REDIS_URL, 
+    decode_responses=True,
+    max_connections=20,          # Connection pool size
+    retry_on_timeout=True,       # Retry on timeout
+    socket_connect_timeout=5,    # Connection timeout
+    socket_timeout=5,            # Socket timeout
+    health_check_interval=30     # Health check every 30s
+)
 
 # Comment out the in-memory cache for reference
 # response_cache: Dict[str, tuple[GenerateResponse, float]] = {}
@@ -49,32 +59,71 @@ async def get_cached_response(cache_key: str):
     try:
         cached = await redis_client.get(cache_key)
         if cached:
-            return GenerateResponse.model_validate_json(cached)
+            # Use compressed JSON deserialization for better performance
+            import json
+            import gzip
+            import base64
+            
+            try:
+                # Try compressed format first
+                compressed_data = base64.b64decode(cached)
+                decompressed_data = gzip.decompress(compressed_data)
+                data = json.loads(decompressed_data.decode('utf-8'))
+                return GenerateResponse.model_validate(data)
+            except:
+                # Fallback to regular JSON
+                return GenerateResponse.model_validate_json(cached)
     except Exception as e:
         logger.error(f"Redis get error: {e}")
     return None
 
 async def cache_response(cache_key: str, response: GenerateResponse, ttl: int = CACHE_TTL):
     try:
-        await redis_client.setex(cache_key, ttl, response.model_dump_json())
+        # Use compressed JSON serialization for better performance
+        import json
+        import gzip
+        import base64
+        
+        # Serialize and compress
+        json_data = response.model_dump_json()
+        compressed_data = gzip.compress(json_data.encode('utf-8'))
+        encoded_data = base64.b64encode(compressed_data).decode('utf-8')
+        
+        await redis_client.setex(cache_key, ttl, encoded_data)
     except Exception as e:
         logger.error(f"Redis set error: {e}")
 
 async def clear_response_cache():
     try:
-        keys = await redis_client.keys("cache:*")
-        if keys:
-            await redis_client.delete(*keys)
+        # Use pipeline for better performance when clearing multiple keys
+        async with redis_client.pipeline() as pipe:
+            keys = await redis_client.keys("cache:*")
+            if keys:
+                for key in keys:
+                    pipe.delete(key)
+                await pipe.execute()
     except Exception as e:
         logger.error(f"Redis clear error: {e}")
 
 async def get_cache_stats():
     try:
-        keys = await redis_client.keys("cache:*")
-        return {"cache_keys": len(keys)}
+        # Use pipeline for multiple Redis operations
+        async with redis_client.pipeline() as pipe:
+            pipe.keys("cache:*")
+            pipe.info("memory")
+            results = await pipe.execute()
+            
+            keys = results[0] if results else []
+            memory_info = results[1] if len(results) > 1 else {}
+            
+            return {
+                "cache_keys": len(keys),
+                "memory_usage": memory_info.get("used_memory_human", "unknown"),
+                "redis_connections": memory_info.get("connected_clients", "unknown")
+            }
     except Exception as e:
         logger.error(f"Redis stats error: {e}")
-        return {"cache_keys": 0}
+        return {"cache_keys": 0, "memory_usage": "unknown", "redis_connections": "unknown"}
 
 # Response caching
 # @lru_cache(maxsize=100)
@@ -103,14 +152,14 @@ def verify_api_key(x_api_key: Optional[str] = Header(None)) -> bool:
     return True
 
 
-@router.post("/generate", response_model=GenerateResponse)
+@router.post("/generate")
 @limiter.limit("20/minute")  # Increased rate limit after optimizations
 async def generate_text(
     request: Request,
     generate_request: GenerateRequest,
     _: bool = Depends(verify_api_key)
 ):
-    """Generate text from prompt with caching"""
+    """Generate text from prompt with caching and thread pool optimization"""
     try:
         if generate_request.stream:
             raise HTTPException(
@@ -125,7 +174,9 @@ async def generate_text(
             logger.info(f"Returning cached response for key: {cache_key[:16]}")
             return cached_response
         
-        response = await llm_handler.generate(generate_request)
+        # OPTIMIZATION: Move LLM inference to thread pool to prevent event loop blocking
+        import asyncio
+        response = await asyncio.to_thread(llm_handler.generate_sync, generate_request)
         
         await cache_response(cache_key, response)
         
@@ -146,28 +197,57 @@ async def generate_stream(
     generate_request: GenerateRequest,
     _: bool = Depends(verify_api_key)
 ):
-    """Generate text with streaming response"""
+    """OPTIMIZED streaming response with proper async generator and thread pool"""
     try:
-        async def stream_generator():
-            """Generator for streaming response with optimized formatting"""
-            async for chunk in llm_handler.generate_stream(generate_request):
-                # Format as Server-Sent Events
-                data = json.dumps(chunk.dict())
-                yield f"data: {data}\n\n"
-                
-                # Check if this is the final chunk
-                if chunk.is_final:
-                    yield "data: [DONE]\n\n"
-                    break
+        # CRITICAL FIX: Proper async generator implementation
+        async def optimized_stream_generator():
+            """Optimized async generator that prevents Starlette streaming bug"""
+            import asyncio
+            import json
+            
+            # Buffer chunks for better performance
+            chunk_buffer = []
+            buffer_size = 3  # Send chunks in groups of 3
+            
+            try:
+                # Move streaming to thread pool to prevent event loop blocking
+                async for chunk in llm_handler.generate_stream_async(generate_request):
+                    # Format as Server-Sent Events with optimized JSON serialization
+                    data = json.dumps(chunk.dict(), separators=(',', ':'))  # Compact JSON
+                    chunk_buffer.append(f"data: {data}\n\n")
+                    
+                    # Batch send for better network efficiency
+                    if len(chunk_buffer) >= buffer_size or chunk.is_final:
+                        # Send all buffered chunks at once
+                        for buffered_chunk in chunk_buffer:
+                            yield buffered_chunk
+                        chunk_buffer = []
+                        
+                        # Small delay to prevent overwhelming client
+                        if not chunk.is_final:
+                            await asyncio.sleep(0.001)  # 1ms delay
+                    
+                    # Check if this is the final chunk
+                    if chunk.is_final:
+                        yield "data: [DONE]\n\n"
+                        break
+                        
+            except Exception as e:
+                # Send error in SSE format
+                error_data = json.dumps({"error": str(e)})
+                yield f"data: {error_data}\n\n"
+                yield "data: [DONE]\n\n"
         
         return StreamingResponse(
-            stream_generator(),
-            media_type="text/plain",
+            optimized_stream_generator(),
+            media_type="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Content-Type": "text/event-stream",
-                "X-Accel-Buffering": "no"  # Disable nginx buffering for better streaming
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Connection": "keep-alive", 
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+                "Access-Control-Allow-Origin": "*",  # CORS for streaming
+                "Access-Control-Expose-Headers": "*"
             }
         )
         

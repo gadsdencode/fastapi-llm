@@ -4,3 +4,7 @@ LOAD_MODEL_ON_STARTUP=true
 API_KEY=your_secret_key  # Optional
 PORT=8000
 HOST=0.0.0.0
+WORKERS=8                   
+LLM_THREADS_MAIN=6          
+LLM_THREADS_BATCH=4        
+LLM_MAX_CONTEXT=1024
