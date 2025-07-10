@@ -40,19 +40,31 @@ class LLMHandler:
         }
     
     async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False) -> bool:
-        """Load a model based on type with optimized parameters
+        """Load a model based on type with RESEARCH-BASED performance optimizations
         
-        CORRECT Optimizations implemented based on research:
-        1. Context Window: Conservative 2048 for Railway memory constraints (4096 can cause OOM)
-        2. KV Cache: Use default F16 (type_k/type_v quantization is experimental and causes failures)
-        3. Thread Optimization: Dynamic thread count based on available CPU cores (4-8 threads)
-        4. MoE Optimization: Larger batch size (512) for Mixture of Experts efficiency
+        OPTIMIZED Performance Settings (based on extensive research):
+        1. Thread Count: Fewer threads (4-6) perform better than many threads for CPU inference
+        2. Batch Processing: Separate n_threads_batch (4) and smaller batches (256/128) for CPU
+        3. Context Window: Conservative 2048 for Railway memory constraints
+        4. KV Cache: Use stable F16 (no experimental quantization)
         5. Memory Mapping: Enabled for faster model loading
-        6. Proven Parameters: Only use stable, tested optimizations that don't cause context failures
+        6. CPU-Specific: Optimized for Railway's 48-core environment with conservative threading
+        
+        Research Sources:
+        - Reddit r/LocalLLaMA CPU optimization discussions
+        - PyImageSearch llama.cpp performance guide
+        - DEV Community CPU vs GPU inference analysis
         """
         if self.is_loaded() and self.model_name == model_name and not force_reload:
             logger.info(f"Model {model_name} already loaded")
             return True
+        
+        # Set CPU optimization environment variables for Railway
+        os.environ['OMP_NUM_THREADS'] = '6'  # Limit OpenMP threads
+        os.environ['MKL_NUM_THREADS'] = '6'  # Limit Intel MKL threads
+        os.environ['OPENBLAS_NUM_THREADS'] = '6'  # Limit OpenBLAS threads
+        os.environ['VECLIB_MAXIMUM_THREADS'] = '6'  # Limit Apple Accelerate threads
+        logger.info("Set CPU optimization environment variables for Railway deployment")
         
         logger.info(f"Loading model: {model_name} (type: {model_type})")
         start_time = time.time()
@@ -67,11 +79,14 @@ class LLMHandler:
                 
                 # Optimize CPU threads for Railway (typically 2-4 vCPUs)
                 cpu_count = os.cpu_count() or 4
-                optimal_threads = min(8, max(4, cpu_count))  # Use 4-8 threads for MoE efficiency
+                # Research shows fewer threads often perform better for CPU inference
+                # For MoE models on Railway's 48 cores, use conservative thread count
+                optimal_threads = min(6, max(4, cpu_count // 8))  # Much fewer threads for better performance
+                optimal_batch_threads = min(4, optimal_threads)  # Even fewer for batch processing
                 
                 # Download optimized model for speed
                 logger.info("Downloading GGUF model from Hugging Face...")
-                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads for optimal MoE performance")
+                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads (batch: {optimal_batch_threads}) for optimal performance")
                 
                 # First, list all files in the repository to find GGUF files
                 from huggingface_hub import list_repo_files
@@ -129,19 +144,21 @@ class LLMHandler:
                 if not model_path:
                     raise RuntimeError(f"Could not download any GGUF file from {model_name}")
                 
-                # Load the model with PROVEN stable settings for TinyDolphin MoE
+                # Load the model with OPTIMIZED performance settings for CPU inference
                 logger.info(f"Loading model from path: {model_path}")
                 self.model = Llama(
                     model_path=model_path,
                     n_ctx=2048,  # Conservative context size for Railway memory limits
-                    n_threads=optimal_threads,  # Dynamic thread count (4-8 threads)
+                    n_threads=optimal_threads,  # Optimized thread count (4-6 threads)
+                    n_threads_batch=optimal_batch_threads,  # Separate batch processing threads
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping for faster loading
                     use_mlock=False,  # Disable memory locking for Railway compatibility
                     verbose=False,  # Reduce log noise
-                    n_batch=512,  # Larger batch size for MoE efficiency
+                    n_batch=256,  # Smaller batch size for better CPU performance
+                    n_ubatch=128,  # Smaller micro-batch for CPU optimization
                     seed=-1,  # Random seed
-                    # PROVEN stable optimizations:
+                    # OPTIMIZED CPU performance settings:
                     rope_freq_base=10000.0,  # Standard RoPE frequency
                     rope_freq_scale=1.0,  # No frequency scaling
                     mul_mat_q=True,  # Enable quantized matrix multiplication
@@ -150,7 +167,7 @@ class LLMHandler:
                     vocab_only=False,  # Load full model
                     numa=False,  # Disable NUMA for Railway
                     offload_kqv=True,  # Optimize KQV operations
-                    # Do NOT use experimental type_k/type_v quantization - causes context failures
+                    # Optimized for CPU inference speed over memory usage
                 )
             else:
                 # Local file path
@@ -158,20 +175,23 @@ class LLMHandler:
                 
                 # Optimize CPU threads for Railway (typically 2-4 vCPUs)
                 cpu_count = os.cpu_count() or 4
-                optimal_threads = min(8, max(4, cpu_count))  # Use 4-8 threads for MoE efficiency
-                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads for optimal MoE performance")
+                optimal_threads = min(6, max(4, cpu_count // 8))  # Much fewer threads for better performance
+                optimal_batch_threads = min(4, optimal_threads)  # Even fewer for batch processing
+                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads (batch: {optimal_batch_threads}) for optimal performance")
                 
                 self.model = Llama(
                     model_path=model_name,
                     n_ctx=2048,  # Conservative context size for Railway memory limits
                     n_threads=optimal_threads,  # Dynamic thread count (4-8 threads)
+                    n_threads_batch=optimal_batch_threads,  # Separate batch processing threads
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,  # Enable memory mapping for faster loading
                     use_mlock=False,  # Disable memory locking for Railway compatibility
                     verbose=False,  # Reduce log noise
-                    n_batch=512,  # Larger batch size for MoE efficiency
+                    n_batch=256,  # Smaller batch size for better CPU performance
+                    n_ubatch=128,  # Smaller micro-batch for CPU optimization
                     seed=-1,  # Random seed
-                    # PROVEN stable optimizations:
+                    # OPTIMIZED CPU performance settings:
                     rope_freq_base=10000.0,  # Standard RoPE frequency
                     rope_freq_scale=1.0,  # No frequency scaling
                     mul_mat_q=True,  # Enable quantized matrix multiplication
@@ -180,7 +200,7 @@ class LLMHandler:
                     vocab_only=False,  # Load full model
                     numa=False,  # Disable NUMA for Railway
                     offload_kqv=True,  # Optimize KQV operations
-                    # Do NOT use experimental type_k/type_v quantization - causes context failures
+                    # Optimized for CPU inference speed over memory usage
                 )
             
             self.model_name = model_name
