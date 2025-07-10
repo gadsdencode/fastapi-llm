@@ -306,7 +306,7 @@ class LLMHandler:
             "n_gpu_layers": 0,  # CPU-only for Railway
             "use_mmap": True,  # Enable memory mapping for faster loading
             "use_mlock": False,  # Disable memory locking for Railway compatibility
-            "verbose": False,  # Reduce log noise
+            "verbose": True,  # Reduce log noise
             "n_batch": 512,  # Larger batch size for high-core systems  
             "n_ubatch": 256,  # Larger micro-batch for 48-core optimization
             "seed": -1,  # Random seed
