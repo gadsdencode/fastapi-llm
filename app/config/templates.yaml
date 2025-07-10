@@ -21,7 +21,7 @@ templates:
       - "<|eot_id|>"
       - "<|start_header_id|>"
       - "<|end_header_id|>"
-    default_system_message: "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe."
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
 
   # ChatML format - Used by many modern models (TinyDolphin, Phi-3, etc.)
   chatml:
@@ -41,7 +41,7 @@ templates:
     stop_tokens:
       - "<|im_end|>"
       - "<|im_start|>"
-    default_system_message: "You are a helpful AI assistant."
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship.
 
   # Mistral/Mixtral format
   mistral:
@@ -77,7 +77,7 @@ templates:
       - "### Human:"
       - "### System:"
       - "### Assistant:"
-    default_system_message: "You are a helpful AI assistant."
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
 
   # CodeLlama format
   codellama:
@@ -94,7 +94,7 @@ templates:
     stop_tokens:
       - "[INST]"
       - "[/INST]"
-    default_system_message: "You are a helpful coding assistant."
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
 
 # Template resolution order - first match wins
 resolution_order:
@@ -108,4 +108,4 @@ resolution_order:
 settings:
   fallback_template: "chatml"
   max_context_length: 2048
-  default_system_message: "You are a helpful AI assistant." 
+  default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship." 

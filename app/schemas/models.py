@@ -32,12 +32,22 @@ class GenerateRequest(BaseModel):
     # New multi-turn conversation support
     messages: Optional[List[ChatMessage]] = Field(None, description="Multi-turn conversation messages")
     
-    # Existing generation parameters
+    # Core generation parameters
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
     top_p: float = Field(0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter")
     max_tokens: int = Field(512, ge=1, le=2048, description="Maximum tokens to generate")
     stop_sequences: Optional[List[str]] = Field(None, description="Stop sequences")
     stream: bool = Field(False, description="Enable streaming response")
+    
+    # Advanced generation parameters (previously hardcoded)
+    repeat_penalty: float = Field(1.05, ge=0.1, le=2.0, description="Repetition penalty to reduce repetitive text")
+    frequency_penalty: float = Field(0.0, ge=-2.0, le=2.0, description="Frequency penalty for token repetition")
+    presence_penalty: float = Field(0.0, ge=-2.0, le=2.0, description="Presence penalty for new token introduction")
+    tfs_z: float = Field(1.0, ge=0.0, le=1.0, description="Tail free sampling parameter")
+    typical_p: float = Field(1.0, ge=0.0, le=1.0, description="Typical sampling parameter")
+    mirostat_mode: int = Field(0, ge=0, le=2, description="Mirostat sampling mode (0=disabled, 1=v1, 2=v2)")
+    mirostat_tau: float = Field(5.0, ge=0.0, le=10.0, description="Mirostat target entropy")
+    mirostat_eta: float = Field(0.1, ge=0.0, le=1.0, description="Mirostat learning rate")
     
     @model_validator(mode='after')
     def validate_prompt_or_messages(self):

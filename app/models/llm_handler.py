@@ -9,6 +9,14 @@ from dataclasses import dataclass
 
 from llama_cpp import Llama
 
+# Add transformers import for tokenizer integration
+try:
+    from transformers import AutoTokenizer
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    logger.warning("transformers not available, Hugging Face chat templates will not be used")
+
 from ..schemas.models import ModelType, GenerateRequest, GenerateResponse, StreamChunk, ModelInfo, ChatMessage
 from ..config import get_template_manager
 
@@ -221,6 +229,8 @@ class LLMHandler:
         self.model_type: Optional[ModelType] = None
         self.load_time: Optional[float] = None
         self.template_manager = get_template_manager()
+        # Add tokenizer for Hugging Face chat template integration
+        self.tokenizer: Optional['AutoTokenizer'] = None
         logger.info("Enhanced LLM Handler initialized with flexible template support")
     
     def is_loaded(self) -> bool:
@@ -347,6 +357,9 @@ class LLMHandler:
             self.model_type = model_type
             self.load_time = time.time() - start_time
             
+            # Try to load tokenizer for Hugging Face chat template integration
+            await self._load_tokenizer(model_name)
+            
             logger.info(f"Model loaded successfully in {self.load_time:.2f}s")
             return True
             
@@ -447,6 +460,31 @@ class LLMHandler:
             logger.error(f"Failed to download GGUF model from {model_name}: {e}")
             raise ValueError(f"Could not download GGUF model from {model_name}: {str(e)}")
     
+    async def _load_tokenizer(self, model_name: str) -> None:
+        """Load Hugging Face tokenizer for chat template integration"""
+        if not TRANSFORMERS_AVAILABLE:
+            logger.debug("Transformers not available, skipping tokenizer loading")
+            return
+            
+        try:
+            # For GGUF models, extract the base repo name
+            if "/" in model_name and not model_name.startswith("./"):
+                repo_name = model_name
+                logger.info(f"Attempting to load tokenizer for: {repo_name}")
+                
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    repo_name,
+                    trust_remote_code=True,
+                    use_fast=False  # Use slow tokenizer for better compatibility
+                )
+                logger.info(f"Successfully loaded tokenizer for {repo_name}")
+            else:
+                logger.debug(f"Local model path detected, skipping tokenizer loading: {model_name}")
+                
+        except Exception as e:
+            logger.debug(f"Could not load tokenizer for {model_name}: {e}")
+            self.tokenizer = None
+    
     def get_model_info(self) -> ModelInfo:
         """Get information about the currently loaded model"""
         if not self.is_loaded():
@@ -465,25 +503,25 @@ class LLMHandler:
         )
     
     def _try_builtin_chat_template(self, messages: List[Dict[str, str]]) -> Optional[str]:
-        """Try to use llama_cpp's built-in chat template if available"""
+        """Try to use Hugging Face tokenizer's chat template if available"""
         try:
-            # Check if model has built-in chat template support
-            if hasattr(self.model, 'chat_completion'):
-                # Try to use llama_cpp's built-in chat completion formatting
-                # This attempts to get just the prompt without generating
-                response = self.model.create_chat_completion(
-                    messages=messages,
-                    max_tokens=1,  # Minimal tokens to get the prompt
-                    temperature=0,
-                    stream=False
-                )
-                # This is a fallback - llama_cpp doesn't expose prompt directly
-                # so we'll rely on our config-based templates
-                return None
-                
-            # Alternative: Check for apply_chat_template method
+            # First priority: Use Hugging Face tokenizer's apply_chat_template
+            if self.tokenizer and hasattr(self.tokenizer, 'apply_chat_template'):
+                # Check if the tokenizer has a chat template
+                if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template:
+                    formatted_prompt = self.tokenizer.apply_chat_template(
+                        messages, 
+                        tokenize=False, 
+                        add_generation_prompt=True
+                    )
+                    logger.info("Using Hugging Face tokenizer chat template")
+                    return formatted_prompt
+                    
+            # Secondary: Check if llama_cpp model has apply_chat_template method
             if hasattr(self.model, 'apply_chat_template'):
-                return self.model.apply_chat_template(messages, tokenize=False)
+                formatted_prompt = self.model.apply_chat_template(messages, tokenize=False)
+                logger.info("Using llama_cpp built-in chat template")
+                return formatted_prompt
                 
         except Exception as e:
             logger.debug(f"Built-in chat template not available or failed: {e}")
@@ -557,8 +595,45 @@ class LLMHandler:
         ]
     
     def _get_stop_tokens_for_model(self) -> List[str]:
-        """Get appropriate stop tokens for the current model"""
-        return self.template_manager.get_stop_tokens_for_model(self.model_name or "")
+        """Get appropriate stop tokens for the current model including EOS token"""
+        # Start with template-based stop tokens
+        stop_tokens = self.template_manager.get_stop_tokens_for_model(self.model_name or "")
+        
+        # Add model-specific EOS token if tokenizer is available
+        if self.tokenizer:
+            try:
+                # Add EOS token if available
+                if hasattr(self.tokenizer, 'eos_token') and self.tokenizer.eos_token:
+                    if self.tokenizer.eos_token not in stop_tokens:
+                        stop_tokens.append(self.tokenizer.eos_token)
+                        logger.debug(f"Added EOS token to stop tokens: {self.tokenizer.eos_token}")
+                
+                # Add additional special tokens that indicate end of generation
+                special_tokens_to_check = ['</s>', '<|end|>', '<|endoftext|>', '<|im_end|>', '<|eot_id|>']
+                for token in special_tokens_to_check:
+                    if (hasattr(self.tokenizer, 'special_tokens_map') and 
+                        token in self.tokenizer.special_tokens_map.values() and 
+                        token not in stop_tokens):
+                        stop_tokens.append(token)
+                        logger.debug(f"Added special stop token: {token}")
+                        
+            except Exception as e:
+                logger.debug(f"Could not extract stop tokens from tokenizer: {e}")
+        
+        # Add llama_cpp model-specific EOS token if available
+        if self.model and hasattr(self.model, 'token_eos'):
+            try:
+                eos_token_id = self.model.token_eos()
+                # Convert token ID to text if possible
+                if hasattr(self.model, 'detokenize'):
+                    eos_text = self.model.detokenize([eos_token_id]).decode('utf-8', errors='ignore')
+                    if eos_text and eos_text not in stop_tokens:
+                        stop_tokens.append(eos_text)
+                        logger.debug(f"Added model EOS token: {eos_text}")
+            except Exception as e:
+                logger.debug(f"Could not extract EOS token from model: {e}")
+        
+        return stop_tokens
     
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
         """Enhanced generation supporting both single prompts and multi-turn conversations"""
@@ -591,13 +666,15 @@ class LLMHandler:
                 stop=stop_tokens,
                 stream=False,
                 echo=False,
-                # Speed optimizations:
-                repeat_penalty=1.05,
-                frequency_penalty=0.0,
-                presence_penalty=0.0,
-                tfs_z=1.0,
-                typical_p=1.0,
-                mirostat_mode=0
+                # User-configurable generation parameters
+                repeat_penalty=request.repeat_penalty,
+                frequency_penalty=request.frequency_penalty,
+                presence_penalty=request.presence_penalty,
+                tfs_z=request.tfs_z,
+                typical_p=request.typical_p,
+                mirostat_mode=request.mirostat_mode,
+                mirostat_tau=request.mirostat_tau,
+                mirostat_eta=request.mirostat_eta
             )
             
             generated_text = output['choices'][0]['text'].strip()
@@ -639,7 +716,6 @@ class LLMHandler:
         
         start_time = time.time()
         token_count = 0
-        accumulated_text = ""  # Track full generated text for better stop token detection
         
         try:
             stream = self.model.create_completion(
@@ -650,13 +726,15 @@ class LLMHandler:
                 stop=stop_tokens,
                 stream=True,
                 echo=False,
-                # Speed optimizations:
-                repeat_penalty=1.05,
-                frequency_penalty=0.0,
-                presence_penalty=0.0,
-                tfs_z=1.0,
-                typical_p=1.0,
-                mirostat_mode=0
+                # User-configurable generation parameters
+                repeat_penalty=request.repeat_penalty,
+                frequency_penalty=request.frequency_penalty,
+                presence_penalty=request.presence_penalty,
+                tfs_z=request.tfs_z,
+                typical_p=request.typical_p,
+                mirostat_mode=request.mirostat_mode,
+                mirostat_tau=request.mirostat_tau,
+                mirostat_eta=request.mirostat_eta
             )
             
             for output in stream:
@@ -667,17 +745,15 @@ class LLMHandler:
                     
                     if delta:
                         token_count += 1
-                        accumulated_text += delta  # Accumulate text for better stop token detection
                         
                         current_time = time.time()
                         elapsed_time = current_time - start_time
                         tokens_per_second = token_count / elapsed_time if elapsed_time > 0 else 0
                         
-                        # Improved completion detection - rely primarily on finish_reason
+                        # Rely primarily on llama_cpp's finish_reason for completion detection
                         is_final = (
                             finish_reason is not None or  # Primary: trust llama_cpp's finish_reason
-                            token_count >= request.max_tokens or  # Safety net: max tokens reached
-                            any(stop_token in accumulated_text for stop_token in stop_tokens)  # Fallback: check accumulated text
+                            token_count >= request.max_tokens  # Safety net: max tokens reached
                         )
                         
                         # Log completion reason for debugging
@@ -687,10 +763,10 @@ class LLMHandler:
                             elif token_count >= request.max_tokens:
                                 completion_reason = "max_tokens_reached"
                             else:
-                                completion_reason = "stop_token_detected_in_accumulated_text"
+                                completion_reason = "unknown"
                             
                             logger.info(f"Stream completion: {completion_reason}, tokens={token_count}, "
-                                      f"text_length={len(accumulated_text)}, elapsed={elapsed_time:.2f}s")
+                                      f"elapsed={elapsed_time:.2f}s")
                         
                         yield StreamChunk(
                             delta=delta,
@@ -708,10 +784,10 @@ class LLMHandler:
                         await asyncio.sleep(0.001)
                         
         except Exception as e:
-            # Log partial output for debugging when generation fails mid-stream
-            partial_preview = accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text
-            logger.error(f"Streaming generation failed after {token_count} tokens and {time.time() - start_time:.2f}s. "
-                        f"Partial output: '{partial_preview}'. Error: {str(e)}")
+            # Log error information for debugging when generation fails mid-stream
+            elapsed_time = time.time() - start_time
+            logger.error(f"Streaming generation failed after {token_count} tokens and {elapsed_time:.2f}s. "
+                        f"Error: {str(e)}")
             raise RuntimeError(f"Streaming generation failed: {str(e)}")
     
     def unload_model(self):
@@ -722,7 +798,13 @@ class LLMHandler:
             self.model_name = None
             self.model_type = None
             self.load_time = None
-            logger.info("Model unloaded successfully")
+            
+        # Also clear tokenizer
+        if self.tokenizer:
+            del self.tokenizer
+            self.tokenizer = None
+            
+        logger.info("Model and tokenizer unloaded successfully")
 
 
 # Global instance
