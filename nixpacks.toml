@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ['openblas']
+nixPkgs = ['openblas', 'cmake', 'gcc', 'git', 'make']
 
 [phases.install]
 cmds = [
-  'CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python==0.3.12 --no-cache-dir --verbose --force-reinstall',
+  'FORCE_CMAKE=1 CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python==0.3.12 --no-cache-dir --verbose --force-reinstall',
   'pip install -r requirements.txt'
 ]
