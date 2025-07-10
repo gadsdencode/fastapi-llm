@@ -59,12 +59,14 @@ class LLMHandler:
             logger.info(f"Model {model_name} already loaded")
             return True
         
-        # Set CPU optimization environment variables for Railway
-        os.environ['OMP_NUM_THREADS'] = '6'  # Limit OpenMP threads
-        os.environ['MKL_NUM_THREADS'] = '6'  # Limit Intel MKL threads
-        os.environ['OPENBLAS_NUM_THREADS'] = '6'  # Limit OpenBLAS threads
-        os.environ['VECLIB_MAXIMUM_THREADS'] = '6'  # Limit Apple Accelerate threads
-        logger.info("Set CPU optimization environment variables for Railway deployment")
+        # Set CPU optimization environment variables for Railway's 48-core deployment
+        # Research shows optimal performance at 50-75% of available cores for high-core systems
+        optimal_env_threads = '32'  # 67% of 48 cores for maximum throughput
+        os.environ['OMP_NUM_THREADS'] = optimal_env_threads
+        os.environ['MKL_NUM_THREADS'] = optimal_env_threads  
+        os.environ['OPENBLAS_NUM_THREADS'] = optimal_env_threads
+        os.environ['VECLIB_MAXIMUM_THREADS'] = optimal_env_threads
+        logger.info(f"Set CPU optimization environment variables for Railway's 48-core deployment: {optimal_env_threads} threads")
         
         logger.info(f"Loading model: {model_name} (type: {model_type})")
         start_time = time.time()
@@ -76,16 +78,20 @@ class LLMHandler:
                 from huggingface_hub import hf_hub_download
                 import tempfile
                 
-                # Optimize CPU threads for Railway (typically 2-4 vCPUs)
-                cpu_count = os.cpu_count() or 4
-                # Research shows fewer threads often perform better for CPU inference
-                # For MoE models on Railway's 48 cores, use conservative thread count
-                optimal_threads = min(6, max(4, cpu_count // 8))  # Much fewer threads for better performance
-                optimal_batch_threads = min(4, optimal_threads)  # Even fewer for batch processing
+                # Optimize CPU threads for Railway's 48-core deployment
+                cpu_count = os.cpu_count() or 48
+                # Research-based optimization: Use 50-75% of cores for high-core systems
+                # MoE models can handle higher thread counts due to parallel expert architecture
+                if cpu_count >= 32:  # High-core system (Railway 48-core)
+                    optimal_threads = int(cpu_count * 0.67)  # 67% of cores (32 threads for 48 cores)
+                    optimal_batch_threads = int(cpu_count * 0.42)  # 42% for batch (20 threads for 48 cores)
+                else:  # Fallback for smaller systems
+                    optimal_threads = max(4, cpu_count // 2)
+                    optimal_batch_threads = max(2, optimal_threads // 2)
                 
                 # Download optimized model for speed
                 logger.info("Downloading GGUF model from Hugging Face...")
-                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads (batch: {optimal_batch_threads}) for optimal performance")
+                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads (batch: {optimal_batch_threads}) for high-performance inference")
                 
                 # First, list all files in the repository to find GGUF files
                 from huggingface_hub import list_repo_files
@@ -109,11 +115,11 @@ class LLMHandler:
                     model_path = None
                     selected_file = None
                     
-                    # Look for the exact TinyDolphin Q4_K_M file
-                    tinydolphin_q4km_files = [f for f in gguf_files if "Q4_K_M" in f]
+                    # Look for the exact TinyDolphin Q4_K_M file (case-insensitive)
+                    tinydolphin_q4km_files = [f for f in gguf_files if "q4_k_m" in f.lower()]
                     if tinydolphin_q4km_files:
                         selected_file = tinydolphin_q4km_files[0]
-                        logger.info(f"Found target TinyDolphin file: {selected_file}")
+                        logger.info(f"Found target TinyDolphin Q4_K_M file: {selected_file}")
                     else:
                         # Find the best matching file based on quantization preference
                         for pattern in preferred_patterns:
@@ -148,14 +154,14 @@ class LLMHandler:
                 self.model = Llama(
                     model_path=model_path,
                     n_ctx=2048,  # Conservative context size for Railway memory limits
-                    n_threads=optimal_threads,  # Optimized thread count (4-6 threads)
-                    n_threads_batch=optimal_batch_threads,  # Separate batch processing threads
+                    n_threads=optimal_threads,  # Optimized thread count (32 threads for 48 cores)
+                    n_threads_batch=optimal_batch_threads,  # Separate batch processing threads (20 threads)
                     n_gpu_layers=0,  # CPU-only for Railway
                     use_mmap=True,  # Enable memory mapping for faster loading
                     use_mlock=False,  # Disable memory locking for Railway compatibility
                     verbose=False,  # Reduce log noise
-                    n_batch=256,  # Smaller batch size for better CPU performance
-                    n_ubatch=128,  # Smaller micro-batch for CPU optimization
+                    n_batch=512,  # Larger batch size for high-core systems  
+                    n_ubatch=256,  # Larger micro-batch for 48-core optimization
                     seed=-1,  # Random seed
                     # OPTIMIZED CPU performance settings:
                     rope_freq_base=10000.0,  # Standard RoPE frequency
@@ -172,23 +178,29 @@ class LLMHandler:
                 # Local file path
                 logger.info(f"Loading local model from path: {model_name}")
                 
-                # Optimize CPU threads for Railway (typically 2-4 vCPUs)
-                cpu_count = os.cpu_count() or 4
-                optimal_threads = min(6, max(4, cpu_count // 8))  # Much fewer threads for better performance
-                optimal_batch_threads = min(4, optimal_threads)  # Even fewer for batch processing
-                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads (batch: {optimal_batch_threads}) for optimal performance")
+                # Optimize CPU threads for Railway's 48-core deployment  
+                cpu_count = os.cpu_count() or 48
+                # Research-based optimization: Use 50-75% of cores for high-core systems
+                # MoE models can handle higher thread counts due to parallel expert architecture
+                if cpu_count >= 32:  # High-core system (Railway 48-core)
+                    optimal_threads = int(cpu_count * 0.67)  # 67% of cores (32 threads for 48 cores)
+                    optimal_batch_threads = int(cpu_count * 0.42)  # 42% for batch (20 threads for 48 cores)
+                else:  # Fallback for smaller systems
+                    optimal_threads = max(4, cpu_count // 2)
+                    optimal_batch_threads = max(2, optimal_threads // 2)
+                logger.info(f"Detected {cpu_count} CPU cores, using {optimal_threads} threads (batch: {optimal_batch_threads}) for high-performance inference")
                 
                 self.model = Llama(
                     model_path=model_name,
                     n_ctx=2048,  # Conservative context size for Railway memory limits
-                    n_threads=optimal_threads,  # Dynamic thread count (4-8 threads)
-                    n_threads_batch=optimal_batch_threads,  # Separate batch processing threads
+                    n_threads=optimal_threads,  # Optimized thread count (32 threads for 48 cores)
+                    n_threads_batch=optimal_batch_threads,  # Separate batch processing threads (20 threads)
                     n_gpu_layers=0,  # CPU-only
                     use_mmap=True,  # Enable memory mapping for faster loading
                     use_mlock=False,  # Disable memory locking for Railway compatibility
                     verbose=False,  # Reduce log noise
-                    n_batch=256,  # Smaller batch size for better CPU performance
-                    n_ubatch=128,  # Smaller micro-batch for CPU optimization
+                    n_batch=512,  # Larger batch size for high-core systems
+                    n_ubatch=256,  # Larger micro-batch for 48-core optimization
                     seed=-1,  # Random seed
                     # OPTIMIZED CPU performance settings:
                     rope_freq_base=10000.0,  # Standard RoPE frequency
