@@ -22,6 +22,7 @@ from app.schemas.models import (
     ErrorResponse
 )
 from app.models.llm_handler import llm_handler
+import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +36,52 @@ security = HTTPBearer(auto_error=False)
 # API Key authentication
 API_KEY = os.getenv("API_KEY")
 
+# Redis connection setup
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+# Comment out the in-memory cache for reference
+# response_cache: Dict[str, tuple[GenerateResponse, float]] = {}
+# CACHE_TTL = 3600  # 1 hour
+CACHE_TTL = 3600  # 1 hour
+
+async def get_cached_response(cache_key: str):
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            return GenerateResponse.model_validate_json(cached)
+    except Exception as e:
+        logger.error(f"Redis get error: {e}")
+    return None
+
+async def cache_response(cache_key: str, response: GenerateResponse, ttl: int = CACHE_TTL):
+    try:
+        await redis_client.setex(cache_key, ttl, response.model_dump_json())
+    except Exception as e:
+        logger.error(f"Redis set error: {e}")
+
+async def clear_response_cache():
+    try:
+        keys = await redis_client.keys("cache:*")
+        if keys:
+            await redis_client.delete(*keys)
+    except Exception as e:
+        logger.error(f"Redis clear error: {e}")
+
+async def get_cache_stats():
+    try:
+        keys = await redis_client.keys("cache:*")
+        return {"cache_keys": len(keys)}
+    except Exception as e:
+        logger.error(f"Redis stats error: {e}")
+        return {"cache_keys": 0}
+
 # Response caching
-@lru_cache(maxsize=100)
+# @lru_cache(maxsize=100)
 def get_cache_key(prompt: str, max_tokens: int, temperature: float, top_p: float) -> str:
     """Generate cache key for request"""
     content = f"{prompt}_{max_tokens}_{temperature}_{top_p}"
     return hashlib.md5(content.encode()).hexdigest()
-
-# In-memory cache for responses
-response_cache: Dict[str, tuple[GenerateResponse, float]] = {}
-CACHE_TTL = 3600  # 1 hour
 
 def verify_api_key(x_api_key: Optional[str] = Header(None)) -> bool:
     """Verify API key if configured"""
@@ -82,33 +119,20 @@ async def generate_text(
             )
         
         # Check cache first for identical requests
-        cache_key = get_cache_key(
+        cache_key = f"cache:{get_cache_key(
             generate_request.prompt,
             generate_request.max_tokens,
             generate_request.temperature,
             generate_request.top_p
-        )
-        
-        if cache_key in response_cache:
-            cached_response, timestamp = response_cache[cache_key]
-            if time.time() - timestamp < CACHE_TTL:
-                logger.info(f"Returning cached response for key: {cache_key[:8]}")
-                return cached_response
-            else:
-                # Remove expired cache entry
-                del response_cache[cache_key]
+        )}"
+        cached_response = await get_cached_response(cache_key)
+        if cached_response:
+            logger.info(f"Returning cached response for key: {cache_key[:16]}")
+            return cached_response
         
         response = await llm_handler.generate(generate_request)
         
-        # Cache the response
-        response_cache[cache_key] = (response, time.time())
-        
-        # Clean up cache if it gets too large
-        if len(response_cache) > 200:
-            # Remove oldest 50 entries
-            sorted_items = sorted(response_cache.items(), key=lambda x: x[1][1])
-            for k, _ in sorted_items[:50]:
-                del response_cache[k]
+        await cache_response(cache_key, response)
         
         return response
         
@@ -184,10 +208,8 @@ async def load_model(
     """Load a model on demand with cache clearing"""
     try:
         # Clear response cache when loading a new model
-        global response_cache
-        if load_request.force_reload or llm_handler.model_name != load_request.model_name:
-            response_cache.clear()
-            logger.info("Cleared response cache due to model change")
+        await clear_response_cache()
+        logger.info("Cleared response cache due to model change")
         
         success = await llm_handler.load_model(
             load_request.model_name,
@@ -219,8 +241,7 @@ async def health_check(request: Request):
         
         # Add cache statistics
         cache_stats = {
-            "cache_size": len(response_cache),
-            "cache_hit_ratio": getattr(health_check, 'cache_hits', 0) / max(getattr(health_check, 'total_requests', 1), 1)
+            "cache_size": await get_cache_stats()["cache_keys"]
         }
         
         memory_usage = llm_handler.get_memory_usage()
@@ -257,11 +278,8 @@ async def clear_cache(
     _: bool = Depends(verify_api_key)
 ):
     """Clear the response cache"""
-    global response_cache
-    cache_size = len(response_cache)
-    response_cache.clear()
-    logger.info(f"Manually cleared response cache ({cache_size} entries)")
-    return {"message": f"Cache cleared successfully ({cache_size} entries removed)"}
+    await clear_response_cache()
+    return {"message": "Cache cleared successfully"}
 
 
 @router.get("/cache/stats")
@@ -271,17 +289,7 @@ async def get_cache_stats(
     _: bool = Depends(verify_api_key)
 ):
     """Get cache statistics"""
-    return {
-        "cache_size": len(response_cache),
-        "cache_entries": [
-            {
-                "key": key[:8] + "...",
-                "age_seconds": time.time() - timestamp,
-                "tokens_generated": cached_response.tokens_generated
-            }
-            for key, (cached_response, timestamp) in list(response_cache.items())[:10]
-        ]
-    }
+    return await get_cache_stats()
 
 
 # Store start time for uptime calculation
