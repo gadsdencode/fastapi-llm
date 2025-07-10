@@ -56,6 +56,7 @@ class ModelLoadRequest(BaseModel):
     model_name: str = Field(..., description="Name of the model to load")
     model_type: ModelType = Field(ModelType.HUGGINGFACE, description="Type of model to load")
     force_reload: bool = Field(False, description="Force reload even if already loaded")
+    preferred_quant: Optional[str] = Field(None, description="Preferred quantization (e.g., 'Q4_K_M', 'Q8_0'). If not found, falls back to defaults.")
 
 
 class HealthResponse(BaseModel):

@@ -192,7 +192,8 @@ async def load_model(
         success = await llm_handler.load_model(
             load_request.model_name,
             load_request.model_type,
-            load_request.force_reload
+            load_request.force_reload,
+            load_request.preferred_quant
         )
         
         if success:

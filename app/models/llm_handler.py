@@ -3,13 +3,212 @@ import time
 import logging
 import psutil
 import asyncio
-from typing import Optional, Dict, Any, Iterator, AsyncIterator, Tuple
+import re
+from typing import Optional, Dict, Any, Iterator, AsyncIterator, Tuple, List
+from dataclasses import dataclass
 
 from llama_cpp import Llama
 
 from ..schemas.models import ModelType, GenerateRequest, GenerateResponse, StreamChunk, ModelInfo
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GGUFFileGroup:
+    """Represents a group of GGUF files (single or multi-part)"""
+    base_name: str
+    files: List[str]
+    quantization: str
+    is_split: bool
+    total_parts: Optional[int] = None
+    primary_file: Optional[str] = None
+
+    def __post_init__(self):
+        if not self.primary_file:
+            # For split files, primary is usually the first part
+            # For single files, primary is the only file
+            self.primary_file = self.files[0] if self.files else None
+
+
+class QuantizationMatcher:
+    """Robust quantization detection using regex patterns"""
+    
+    # Define regex patterns for common quantization formats
+    QUANTIZATION_PATTERNS = {
+        'Q2_K': re.compile(r'q2[-_]?k(?![\w])', re.IGNORECASE),
+        'Q3_K_S': re.compile(r'q3[-_]?k[-_]?s', re.IGNORECASE),
+        'Q3_K_M': re.compile(r'q3[-_]?k[-_]?m', re.IGNORECASE),
+        'Q3_K_L': re.compile(r'q3[-_]?k[-_]?l', re.IGNORECASE),
+        'Q4_0': re.compile(r'q4[-_]?0', re.IGNORECASE),
+        'Q4_1': re.compile(r'q4[-_]?1', re.IGNORECASE),
+        'Q4_K_S': re.compile(r'q4[-_]?k[-_]?s', re.IGNORECASE),
+        'Q4_K_M': re.compile(r'q4[-_]?k[-_]?m', re.IGNORECASE),
+        'Q5_0': re.compile(r'q5[-_]?0', re.IGNORECASE),
+        'Q5_1': re.compile(r'q5[-_]?1', re.IGNORECASE),
+        'Q5_K_S': re.compile(r'q5[-_]?k[-_]?s', re.IGNORECASE),
+        'Q5_K_M': re.compile(r'q5[-_]?k[-_]?m', re.IGNORECASE),
+        'Q6_K': re.compile(r'q6[-_]?k(?![\w])', re.IGNORECASE),
+        'Q8_0': re.compile(r'q8[-_]?0', re.IGNORECASE),
+        'F16': re.compile(r'f16(?![\w])', re.IGNORECASE),
+        'F32': re.compile(r'f32(?![\w])', re.IGNORECASE),
+    }
+
+    @classmethod
+    def detect_quantization(cls, filename: str) -> Optional[str]:
+        """
+        Detect quantization type from filename using regex patterns
+        
+        Args:
+            filename: GGUF filename to analyze
+            
+        Returns:
+            Detected quantization type or None if not found
+        """
+        for quant_type, pattern in cls.QUANTIZATION_PATTERNS.items():
+            if pattern.search(filename):
+                return quant_type
+        return None
+
+    @classmethod
+    def normalize_quantization(cls, quant_input: str) -> Optional[str]:
+        """
+        Normalize user input quantization to standard format
+        
+        Args:
+            quant_input: User-provided quantization string
+            
+        Returns:
+            Normalized quantization type or None if invalid
+        """
+        # Try to match against our known patterns
+        for quant_type, pattern in cls.QUANTIZATION_PATTERNS.items():
+            if pattern.search(quant_input):
+                return quant_type
+        return None
+
+
+class GGUFFileHandler:
+    """Handles GGUF file detection, grouping, and multi-file support"""
+    
+    # Pattern for detecting split GGUF files (e.g., model-00001-of-00003.gguf)
+    SPLIT_FILE_PATTERN = re.compile(r'^(.+)-(\d{5})-of-(\d{5})\.gguf$', re.IGNORECASE)
+    
+    @classmethod
+    def group_gguf_files(cls, files: List[str]) -> List[GGUFFileGroup]:
+        """
+        Group GGUF files by base name and detect multi-file models
+        
+        Args:
+            files: List of GGUF filenames
+            
+        Returns:
+            List of GGUFFileGroup objects representing file groups
+        """
+        single_files = []
+        split_groups = {}
+        
+        for filename in files:
+            # Check if this is a split file
+            match = cls.SPLIT_FILE_PATTERN.match(filename)
+            if match:
+                base_name = match.group(1)
+                part_num = int(match.group(2))
+                total_parts = int(match.group(3))
+                
+                if base_name not in split_groups:
+                    split_groups[base_name] = {
+                        'files': [],
+                        'total_parts': total_parts,
+                        'quantization': None
+                    }
+                
+                split_groups[base_name]['files'].append((part_num, filename))
+                
+                # Detect quantization from the base name
+                if not split_groups[base_name]['quantization']:
+                    split_groups[base_name]['quantization'] = QuantizationMatcher.detect_quantization(base_name)
+            else:
+                # Single file
+                single_files.append(filename)
+        
+        # Create file groups
+        groups = []
+        
+        # Add single files
+        for filename in single_files:
+            quantization = QuantizationMatcher.detect_quantization(filename) or 'UNKNOWN'
+            groups.append(GGUFFileGroup(
+                base_name=filename.replace('.gguf', ''),
+                files=[filename],
+                quantization=quantization,
+                is_split=False,
+                primary_file=filename
+            ))
+        
+        # Add split file groups
+        for base_name, group_data in split_groups.items():
+            # Sort files by part number
+            sorted_files = sorted(group_data['files'], key=lambda x: x[0])
+            file_list = [f[1] for f in sorted_files]
+            
+            # Verify we have all parts
+            expected_parts = group_data['total_parts']
+            if len(file_list) != expected_parts:
+                logger.warning(f"Incomplete split model {base_name}: found {len(file_list)}/{expected_parts} parts")
+                continue
+            
+            quantization = group_data['quantization'] or 'UNKNOWN'
+            groups.append(GGUFFileGroup(
+                base_name=base_name,
+                files=file_list,
+                quantization=quantization,
+                is_split=True,
+                total_parts=expected_parts,
+                primary_file=file_list[0]  # First part as primary
+            ))
+        
+        return groups
+
+    @classmethod
+    def select_best_group(cls, groups: List[GGUFFileGroup], preferred_quant: Optional[str] = None, 
+                         model_preferences: Optional[List[str]] = None) -> Optional[GGUFFileGroup]:
+        """
+        Select the best GGUF file group based on preferences
+        
+        Args:
+            groups: List of available file groups
+            preferred_quant: User's preferred quantization (takes priority)
+            model_preferences: Default quantization preferences for model type
+            
+        Returns:
+            Best matching GGUFFileGroup or None if no suitable group found
+        """
+        if not groups:
+            return None
+        
+        # First, try to match user's preferred quantization
+        if preferred_quant:
+            normalized_pref = QuantizationMatcher.normalize_quantization(preferred_quant)
+            if normalized_pref:
+                for group in groups:
+                    if group.quantization == normalized_pref:
+                        logger.info(f"Selected preferred quantization {normalized_pref}: {group.primary_file}")
+                        return group
+                logger.warning(f"Preferred quantization {preferred_quant} not found, falling back to defaults")
+        
+        # Fall back to model-specific preferences
+        if model_preferences:
+            for pref_quant in model_preferences:
+                for group in groups:
+                    if group.quantization == pref_quant:
+                        logger.info(f"Selected fallback quantization {pref_quant}: {group.primary_file}")
+                        return group
+        
+        # Last resort: take the first group
+        selected = groups[0]
+        logger.info(f"No preferred quantization found, using: {selected.primary_file} ({selected.quantization})")
+        return selected
 
 
 class LLMHandler:
@@ -110,7 +309,7 @@ class LLMHandler:
             "offload_kqv": True,  # Optimize KQV operations
         }
 
-    async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False) -> bool:
+    async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False, preferred_quant: Optional[str] = None) -> bool:
         """Load a model based on type with RESEARCH-BASED performance optimizations"""
         if self.is_loaded() and self.model_name == model_name and not force_reload:
             logger.info(f"Model {model_name} already loaded")
@@ -130,7 +329,7 @@ class LLMHandler:
             
             # Determine model path based on type
             if model_type == ModelType.GGUF or "/" in model_name:
-                model_path = await self._download_gguf_model(model_name)
+                model_path = await self._download_gguf_model(model_name, preferred_quant)
             else:
                 model_path = model_name
                 logger.info(f"Loading local model from path: {model_name}")
@@ -157,97 +356,94 @@ class LLMHandler:
             self.model = None
             raise RuntimeError(error_msg) from e
     
-    async def _download_gguf_model(self, model_name: str) -> str:
-        """Download GGUF model from Hugging Face Hub
+    async def _download_gguf_model(self, model_name: str, preferred_quant: Optional[str] = None) -> str:
+        """Download GGUF model from Hugging Face Hub with robust file selection
         
         Args:
             model_name: Model repository name on Hugging Face
+            preferred_quant: User's preferred quantization (e.g., 'Q4_K_M', 'Q8_0')
             
         Returns:
-            Path to downloaded model file
+            Path to downloaded primary model file
         """
         # Use huggingface_hub to download GGUF files
         from huggingface_hub import hf_hub_download, list_repo_files
         
-        logger.info("Downloading GGUF model from Hugging Face...")
+        logger.info(f"Downloading GGUF model from Hugging Face: {model_name}")
+        if preferred_quant:
+            logger.info(f"User preferred quantization: {preferred_quant}")
         
-        # List all files in the repository to find GGUF files
         try:
+            # List all files in the repository to find GGUF files
             repo_files = list_repo_files(repo_id=model_name, repo_type="model")
             gguf_files = [f for f in repo_files if f.endswith('.gguf')]
             
             if not gguf_files:
                 raise ValueError(f"No GGUF files found in {model_name}")
             
-            logger.info(f"Found GGUF files: {gguf_files}")
+            logger.info(f"Found {len(gguf_files)} GGUF files: {gguf_files}")
             
-            # Prioritize quantizations based on model type
-            if "llama-3.2" in model_name.lower():
-                # For Llama 3.2, prioritize Q8_0 for accuracy, then Q4_K_M for speed
-                preferred_patterns = [
-                    "Q8_0",      # Target quantization for Llama 3.2 (high accuracy)
-                    "Q4_K_M",    # Good speed/quality balance
-                    "Q5_K_M",    # Higher quality
-                    "Q4_K_S",    # Backup option
-                    "Q4_0"       # Fast fallback
-                ]
+            # Group GGUF files and detect multi-file models
+            file_groups = GGUFFileHandler.group_gguf_files(gguf_files)
+            
+            if not file_groups:
+                raise ValueError(f"No valid GGUF file groups found in {model_name}")
+            
+            logger.info(f"Detected {len(file_groups)} file groups:")
+            for group in file_groups:
+                logger.info(f"  - {group.base_name}: {group.quantization} ({'split' if group.is_split else 'single'}, {len(group.files)} files)")
+            
+            # Define model-specific quantization preferences
+            if "llama-3.2" in model_name.lower() or "llama-3" in model_name.lower():
+                # For Llama 3.2/3.x, prioritize Q8_0 for accuracy, then Q4_K_M for speed
+                model_preferences = ["Q8_0", "Q4_K_M", "Q5_K_M", "Q4_K_S", "Q4_0"]
             else:
-                # For TinyDolphin and other models, prioritize Q4_K_M for speed
-                preferred_patterns = [
-                    "Q4_K_M",    # Target quantization for speed/quality balance
-                    "Q4_K_S",    # Backup option
-                    "Q4_0",      # Fast fallback
-                    "Q3_K_M",    # Fastest option
-                    "Q5_K_M"     # Higher quality if needed
-                ]
+                # For other models, prioritize Q4_K_M for speed/quality balance
+                model_preferences = ["Q4_K_M", "Q4_K_S", "Q4_0", "Q3_K_M", "Q5_K_M", "Q8_0"]
             
-            selected_file = None
-            
-            # Look for target quantization files based on model type
-            if "llama-3.2" in model_name.lower():
-                # Look for Q8_0 for Llama 3.2 models
-                target_files = [f for f in gguf_files if "q8_0" in f.lower()]
-                if target_files:
-                    selected_file = target_files[0]
-                    logger.info(f"Found target Llama 3.2 Q8_0 file: {selected_file}")
-                else:
-                    target_files = [f for f in gguf_files if "q4_k_m" in f.lower()]
-                    if target_files:
-                        selected_file = target_files[0]
-                        logger.info(f"Found fallback Llama 3.2 Q4_K_M file: {selected_file}")
-            else:
-                # Look for Q4_K_M for other models (TinyDolphin)
-                target_files = [f for f in gguf_files if "q4_k_m" in f.lower()]
-                if target_files:
-                    selected_file = target_files[0]
-                    logger.info(f"Found target Q4_K_M file: {selected_file}")
-            
-            if not selected_file:
-                # Find the best matching file based on quantization preference
-                for pattern in preferred_patterns:
-                    matching_files = [f for f in gguf_files if pattern in f]
-                    if matching_files:
-                        selected_file = matching_files[0]  # Take first match
-                        logger.info(f"Selected quantization: {pattern} from file: {selected_file}")
-                        break
-                
-                # If no preferred quantization found, take any GGUF file
-                if not selected_file:
-                    selected_file = gguf_files[0]
-                    logger.warning(f"No preferred quantization found, using: {selected_file}")
-            
-            logger.info(f"Attempting to download {selected_file}")
-            model_path = hf_hub_download(
-                repo_id=model_name,
-                filename=selected_file,
-                cache_dir="/tmp/models"
+            # Select the best file group based on preferences
+            selected_group = GGUFFileHandler.select_best_group(
+                file_groups, 
+                preferred_quant=preferred_quant,
+                model_preferences=model_preferences
             )
-            logger.info(f"Successfully downloaded {selected_file}")
-            return model_path
+            
+            if not selected_group:
+                raise ValueError(f"No suitable GGUF file group found in {model_name}")
+            
+            # Download all files in the selected group
+            downloaded_files = []
+            for filename in selected_group.files:
+                logger.info(f"Downloading {filename}...")
+                file_path = hf_hub_download(
+                    repo_id=model_name,
+                    filename=filename,
+                    cache_dir="/tmp/models"
+                )
+                downloaded_files.append(file_path)
+                logger.info(f"Successfully downloaded {filename}")
+            
+            # Return the primary file path
+            primary_path = None
+            for i, filename in enumerate(selected_group.files):
+                if filename == selected_group.primary_file:
+                    primary_path = downloaded_files[i]
+                    break
+            
+            if not primary_path:
+                primary_path = downloaded_files[0]  # Fallback to first file
+            
+            if selected_group.is_split:
+                logger.info(f"Downloaded multi-file model: {len(downloaded_files)} parts, primary: {selected_group.primary_file}")
+            else:
+                logger.info(f"Downloaded single-file model: {selected_group.primary_file}")
+            
+            logger.info(f"Model quantization: {selected_group.quantization}")
+            return primary_path
             
         except Exception as e:
-            logger.error(f"Failed to list or download files from {model_name}: {e}")
-            raise ValueError(f"Could not download any GGUF file from {model_name}")
+            logger.error(f"Failed to download GGUF model from {model_name}: {e}")
+            raise ValueError(f"Could not download GGUF model from {model_name}: {str(e)}")
     
     def get_model_info(self) -> ModelInfo:
         """Get information about the currently loaded model"""
