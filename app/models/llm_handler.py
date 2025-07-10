@@ -537,7 +537,15 @@ class LLMHandler:
         if 'assistant_start' in format_config:
             formatted_parts.append(format_config['assistant_start'])
             
-        return ''.join(formatted_parts)
+        formatted_prompt = ''.join(formatted_parts)
+        
+        # Defensive check: Remove duplicate leading <|begin_of_text|> tokens
+        # This prevents issues if templates accidentally include them or future llama_cpp changes
+        while formatted_prompt.startswith("<|begin_of_text|><|begin_of_text|>"):
+            formatted_prompt = formatted_prompt[len("<|begin_of_text|>"):]
+            logger.warning("Removed duplicate leading <|begin_of_text|> token from prompt")
+            
+        return formatted_prompt
     
     def _convert_prompt_to_messages(self, prompt: str) -> List[ChatMessage]:
         """Convert legacy single prompt to message format"""
