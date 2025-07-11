@@ -1,0 +1,4897 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.github/workflows/clean-dev_fastapi-llm-server.yml
+.gitignore
+=0.19.0
+app/__init__.py
+app/api/endpoints.py
+app/config/__init__.py
+app/config/templates.yaml
+app/main.py
+app/schemas/models.py
+DEPLOYMENT_UPDATE.md
+Dockerfile
+env
+LICENSE.md
+LLAMA32_INTEGRATION.md
+main.py
+nixpacks.toml
+OPTIMIZATION_SUMMARY.md
+PERFORMANCE_OPTIMIZATIONS.md
+railway.json
+README.md
+repomix-output.txt
+requirements.txt
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".github/workflows/clean-dev_fastapi-llm-server.yml">
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
+
+name: Build and deploy Python app to Azure Web App - FastAPI-LLM-Server
+
+on:
+  push:
+    branches:
+      - clean-dev
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Create and start virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
+
+      - name: Zip artifact for deployment
+        run: zip release.zip ./* -r
+
+      - name: Upload artifact for deployment jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-app
+          path: |
+            release.zip
+            !venv/
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: python-app
+
+      - name: Unzip artifact for deployment
+        run: unzip release.zip
+
+      
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C09469A5F76B4B1CB34EC391471B1884 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_B2935E34B48940089811B488A80FC3F2 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_414D810E45924B4381323ECDD259ACDE }}
+
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v3
+        id: deploy-to-webapp
+        with:
+          app-name: 'FastAPI-LLM-Server'
+          slot-name: 'Production'
+</file>
+
+<file path=".gitignore">
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/#use-with-ide
+.pdm.toml
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+# Model files (downloaded automatically)
+models/
+*.gguf
+*.safetensors
+*.bin
+</file>
+
+<file path="=0.19.0">
+Collecting huggingface_hub
+  Using cached huggingface_hub-0.33.2-py3-none-any.whl.metadata (14 kB)
+Collecting filelock (from huggingface_hub)
+  Using cached filelock-3.18.0-py3-none-any.whl.metadata (2.9 kB)
+Collecting fsspec>=2023.5.0 (from huggingface_hub)
+  Downloading fsspec-2025.5.1-py3-none-any.whl.metadata (11 kB)
+Collecting packaging>=20.9 (from huggingface_hub)
+  Using cached packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pyyaml>=5.1 (from huggingface_hub)
+  Downloading PyYAML-6.0.2-cp311-cp311-win_amd64.whl.metadata (2.1 kB)
+Collecting requests (from huggingface_hub)
+  Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+Collecting tqdm>=4.42.1 (from huggingface_hub)
+  Using cached tqdm-4.67.1-py3-none-any.whl.metadata (57 kB)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in c:\users\jmart\appdev\fastapi-llm\venv\lib\site-packages (from huggingface_hub) (4.14.1)
+Collecting colorama (from tqdm>=4.42.1->huggingface_hub)
+  Using cached colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+Collecting charset_normalizer<4,>=2 (from requests->huggingface_hub)
+  Downloading charset_normalizer-3.4.2-cp311-cp311-win_amd64.whl.metadata (36 kB)
+Collecting idna<4,>=2.5 (from requests->huggingface_hub)
+  Using cached idna-3.10-py3-none-any.whl.metadata (10 kB)
+Collecting urllib3<3,>=1.21.1 (from requests->huggingface_hub)
+  Downloading urllib3-2.5.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi>=2017.4.17 (from requests->huggingface_hub)
+  Downloading certifi-2025.7.9-py3-none-any.whl.metadata (2.4 kB)
+Using cached huggingface_hub-0.33.2-py3-none-any.whl (515 kB)
+Downloading fsspec-2025.5.1-py3-none-any.whl (199 kB)
+   ---------------------------------------- 199.1/199.1 kB 3.0 MB/s eta 0:00:00
+Using cached packaging-25.0-py3-none-any.whl (66 kB)
+Downloading PyYAML-6.0.2-cp311-cp311-win_amd64.whl (161 kB)
+   ---------------------------------------- 162.0/162.0 kB 9.5 MB/s eta 0:00:00
+Using cached tqdm-4.67.1-py3-none-any.whl (78 kB)
+Using cached filelock-3.18.0-py3-none-any.whl (16 kB)
+Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+   ---------------------------------------- 64.8/64.8 kB ? eta 0:00:00
+Downloading certifi-2025.7.9-py3-none-any.whl (159 kB)
+   ---------------------------------------- 159.2/159.2 kB ? eta 0:00:00
+Downloading charset_normalizer-3.4.2-cp311-cp311-win_amd64.whl (105 kB)
+   ---------------------------------------- 105.4/105.4 kB 5.9 MB/s eta 0:00:00
+Using cached idna-3.10-py3-none-any.whl (70 kB)
+Downloading urllib3-2.5.0-py3-none-any.whl (129 kB)
+   ---------------------------------------- 129.8/129.8 kB 8.0 MB/s eta 0:00:00
+Using cached colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+Installing collected packages: urllib3, pyyaml, packaging, idna, fsspec, filelock, colorama, charset_normalizer, certifi, tqdm, requests, huggingface_hub
+Successfully installed certifi-2025.7.9 charset_normalizer-3.4.2 colorama-0.4.6 filelock-3.18.0 fsspec-2025.5.1 huggingface_hub-0.33.2 idna-3.10 packaging-25.0 pyyaml-6.0.2 requests-2.32.4 tqdm-4.67.1 urllib3-2.5.0
+</file>
+
+<file path="app/__init__.py">
+# FastAPI LLM Inference Server
+__version__ = "1.0.0"
+</file>
+
+<file path="app/config/__init__.py">
+"""Configuration management utilities for chat templates and model settings"""
+
+import yaml
+import logging
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+from functools import lru_cache
+
+logger = logging.getLogger(__name__)
+
+
+class TemplateManager:
+    """Manages chat template loading, caching, and resolution"""
+    
+    def __init__(self, config_path: Optional[Path] = None):
+        """Initialize template manager with optional custom config path"""
+        if config_path is None:
+            config_path = Path(__file__).parent / "templates.yaml"
+        
+        self.config_path = config_path
+        self._templates_cache: Optional[Dict[str, Any]] = None
+    
+    @property
+    def templates(self) -> Dict[str, Any]:
+        """Lazy-loaded templates with caching"""
+        if self._templates_cache is None:
+            self._templates_cache = self._load_templates()
+        return self._templates_cache
+    
+    def _load_templates(self) -> Dict[str, Any]:
+        """Load templates from YAML configuration"""
+        try:
+            if not self.config_path.exists():
+                logger.error(f"Template configuration not found: {self.config_path}")
+                return self._get_fallback_config()
+            
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                logger.info(f"Loaded template configuration from {self.config_path}")
+                return config
+                
+        except Exception as e:
+            logger.error(f"Failed to load template configuration: {e}")
+            return self._get_fallback_config()
+    
+    def _get_fallback_config(self) -> Dict[str, Any]:
+        """Provide minimal fallback configuration if YAML loading fails"""
+        logger.warning("Using fallback template configuration")
+        return {
+            "templates": {
+                "chatml": {
+                    "patterns": ["default"],
+                    "format": {
+                        "system_start": "<|im_start|>system\n",
+                        "system_end": "<|im_end|>\n",
+                        "user_start": "<|im_start|>user\n",
+                        "user_end": "<|im_end|>\n",
+                        "assistant_start": "<|im_start|>assistant\n",
+                        "assistant_end": "<|im_end|>\n"
+                    },
+                    "stop_tokens": ["<|im_end|>", "<|im_start|>"],
+                    "default_system_message": "You are a helpful AI assistant."
+                }
+            },
+            "settings": {
+                "fallback_template": "chatml",
+                "default_system_message": "You are a helpful AI assistant."
+            }
+        }
+    
+    def get_template_for_model(self, model_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get template configuration for a specific model
+        
+        Args:
+            model_name: Name of the model to get template for
+            
+        Returns:
+            Template configuration dict or None if not found
+        """
+        if not model_name:
+            return self._get_fallback_template()
+        
+        model_lower = model_name.lower()
+        templates = self.templates.get("templates", {})
+        
+        # Check resolution order if specified
+        resolution_order = self.templates.get("resolution_order", templates.keys())
+        
+        for template_name in resolution_order:
+            if template_name not in templates:
+                continue
+                
+            template_config = templates[template_name]
+            patterns = template_config.get("patterns", [])
+            
+            # Check if any pattern matches the model name
+            for pattern in patterns:
+                if pattern.lower() in model_lower:
+                    logger.info(f"Selected template '{template_name}' for model '{model_name}' (matched pattern: '{pattern}')")
+                    return template_config
+        
+        # Fallback to default template
+        logger.info(f"No specific template found for model '{model_name}', using fallback")
+        return self._get_fallback_template()
+    
+    def _get_fallback_template(self) -> Dict[str, Any]:
+        """Get the fallback template configuration"""
+        fallback_name = self.templates.get("settings", {}).get("fallback_template", "chatml")
+        templates = self.templates.get("templates", {})
+        
+        if fallback_name in templates:
+            return templates[fallback_name]
+        
+        # If fallback doesn't exist, return the first available template
+        if templates:
+            first_template = next(iter(templates.values()))
+            logger.warning(f"Fallback template '{fallback_name}' not found, using first available template")
+            return first_template
+        
+        # Last resort - return hardcoded minimal config
+        logger.error("No templates available, using hardcoded fallback")
+        return {
+            "format": {
+                "system_start": "<|im_start|>system\n",
+                "system_end": "<|im_end|>\n",
+                "user_start": "<|im_start|>user\n",
+                "user_end": "<|im_end|>\n",
+                "assistant_start": "<|im_start|>assistant\n",
+                "assistant_end": "<|im_end|>\n"
+            },
+            "stop_tokens": ["<|im_end|>", "<|im_start|>"],
+            "default_system_message": "You are a helpful AI assistant."
+        }
+    
+    def get_stop_tokens_for_model(self, model_name: str) -> List[str]:
+        """Get stop tokens for a specific model"""
+        template_config = self.get_template_for_model(model_name)
+        return template_config.get("stop_tokens", ["<|im_end|>"])
+    
+    def get_default_system_message(self, model_name: str) -> str:
+        """Get default system message for a specific model"""
+        template_config = self.get_template_for_model(model_name)
+        return template_config.get(
+            "default_system_message",
+            self.templates.get("settings", {}).get("default_system_message", "You are a helpful AI assistant.")
+        )
+    
+    def reload_templates(self):
+        """Force reload of template configuration"""
+        self._templates_cache = None
+        logger.info("Template configuration cache cleared, will reload on next access")
+    
+    def list_available_templates(self) -> List[str]:
+        """Get list of available template names"""
+        return list(self.templates.get("templates", {}).keys())
+    
+    def validate_template_config(self) -> bool:
+        """Validate that the template configuration is valid"""
+        try:
+            templates = self.templates.get("templates", {})
+            
+            if not templates:
+                logger.error("No templates defined in configuration")
+                return False
+            
+            for name, config in templates.items():
+                # Check required fields
+                if "format" not in config:
+                    logger.error(f"Template '{name}' missing 'format' section")
+                    return False
+                
+                format_config = config["format"]
+                required_format_keys = ["system_start", "system_end", "user_start", "user_end", "assistant_start", "assistant_end"]
+                
+                for key in required_format_keys:
+                    if key not in format_config:
+                        logger.error(f"Template '{name}' format missing required key: '{key}'")
+                        return False
+                
+                if "stop_tokens" not in config or not isinstance(config["stop_tokens"], list):
+                    logger.error(f"Template '{name}' missing or invalid 'stop_tokens'")
+                    return False
+            
+            logger.info("Template configuration validation passed")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Template configuration validation failed: {e}")
+            return False
+
+
+# Global instance for convenient access
+@lru_cache(maxsize=1)
+def get_template_manager() -> TemplateManager:
+    """Get a cached instance of the template manager"""
+    return TemplateManager()
+
+
+def load_templates() -> Dict[str, Any]:
+    """Load chat templates from configuration (legacy function)"""
+    manager = get_template_manager()
+    return manager.templates
+</file>
+
+<file path="DEPLOYMENT_UPDATE.md">
+# Deployment Update: Llama 3.2 3B Instruct Model
+
+## Changes Made
+
+### 1. Updated Default Model Configuration
+**File**: `app/main.py`
+- Changed default MODEL_NAME to `v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF`
+- Changed default MODEL_TYPE to `gguf`
+- Enabled LOAD_MODEL_ON_STARTUP by default
+
+### 2. Updated Environment Configuration
+**File**: `env`
+- Updated MODEL_NAME to Llama 3.2 3B Instruct model
+- Changed MODEL_TYPE from `huggingface` to `gguf`
+- Maintained LOAD_MODEL_ON_STARTUP=true
+
+### 3. Implementation Features
+- **Automatic Model Detection**: System detects Llama 3.2 models and applies correct chat template
+- **Optimized Threading**: 32 threads (67% of 48 cores) for maximum performance
+- **Q8_0 Quantization**: Higher accuracy than previous Q4_K_M quantization
+- **Proper Stop Tokens**: Uses Llama 3.2 specific tokens (`<|eot_id|>`, etc.)
+
+## Railway Deployment
+
+### Environment Variables to Set (Optional Override)
+If you need to override the defaults on Railway, set these environment variables:
+
+```bash
+MODEL_NAME=v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF
+MODEL_TYPE=gguf
+LOAD_MODEL_ON_STARTUP=true
+```
+
+### Expected Startup Logs
+After deployment, you should see logs like:
+```
+INFO - Loading model: v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF (type: ModelType.GGUF)
+INFO - Found target Llama 3.2 Q8_0 file: llama-3.2-3b-instruct-uncensored-q8_0.gguf
+INFO - Detected 48 CPU cores, using 32 threads (batch: 20) for high-performance inference
+INFO - Model loaded successfully in X.XXs
+```
+
+### Performance Expectations
+- **Model Size**: ~3.6GB (Q8_0 quantization)
+- **Load Time**: 8-15 seconds
+- **Generation Speed**: 40-80 tokens/second (8-16x improvement)
+- **CPU Utilization**: ~67% of 48 cores
+- **Memory Usage**: More efficient with better quantization
+
+## Verification
+
+### Test the New Model
+1. **Basic Generation Test**:
+   ```bash
+   curl -X POST "https://your-railway-app.railway.app/api/v1/generate" \
+   -H "Content-Type: application/json" \
+   -d '{
+     "prompt": "What is the capital of France?",
+     "max_tokens": 100,
+     "temperature": 0.7
+   }'
+   ```
+
+2. **Model Info Check**:
+   ```bash
+   curl "https://your-railway-app.railway.app/api/v1/model/info"
+   ```
+
+### Expected Response Format
+The model should respond with proper Llama 3.2 formatting and improved quality due to Q8_0 quantization.
+
+## Rollback Plan
+If issues occur, you can quickly rollback by setting these Railway environment variables:
+```bash
+MODEL_NAME=v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
+MODEL_TYPE=huggingface
+```
+
+## Next Steps
+1. Deploy the updated code to Railway
+2. Monitor startup logs for successful model loading
+3. Test generation performance and quality
+4. Verify CPU utilization improvements (~67%)
+5. Benchmark token generation speed (target: 40-80 tok/s)
+</file>
+
+<file path="LICENSE.md">
+The MIT License (MIT)
+
+Copyright (c) 2022 Himesh Samarasekera
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+</file>
+
+<file path="LLAMA32_INTEGRATION.md">
+# Llama 3.2 3B Instruct Integration
+
+## Overview
+Successfully integrated support for `v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF` model with proper chat template formatting and optimized configuration for Railway's 48-core deployment.
+
+## Model Specifications
+
+### Basic Info
+- **Model**: v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF
+- **Base Model**: chuanli11/Llama-3.2-3B-Instruct-uncensored
+- **Parameters**: 3.61B
+- **Quantization**: Q8_0 (8-bit for high accuracy)
+- **Architecture**: Llama 3.2 Instruct
+- **Context Window**: Supports up to 128k (configured to 2048 for Railway memory limits)
+
+### Key Features
+- **Uncensored**: Designed to provide information on sensitive topics responsibly
+- **Instruction-tuned**: Optimized for conversational dialogue
+- **High Accuracy**: Q8_0 quantization maintains model quality
+- **Fast Inference**: Optimized for CPU deployment with 32 threads
+
+## Implementation Details
+
+### Chat Template Format
+The model uses the official Llama 3.2/3.x Instruct chat template:
+
+```
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+{system_message}<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{user_message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+{assistant_response}<|eot_id|>
+```
+
+### Stop Tokens
+- `<|eot_id|>` - End of turn
+- `<|start_header_id|>` - Start of header
+- `<|end_header_id|>` - End of header
+
+### Automatic Model Detection
+The system automatically detects Llama 3.2/3.x models and applies appropriate formatting:
+
+```python
+if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()):
+    # Use Llama 3.2 format
+else:
+    # Use ChatML format for other models
+```
+
+### Quantization Priority
+For Llama 3.2 models, the system prioritizes:
+1. **Q8_0** - Target for high accuracy
+2. **Q4_K_M** - Good speed/quality balance
+3. **Q5_K_M** - Higher quality fallback
+4. **Q4_K_S** - Backup option
+5. **Q4_0** - Fast fallback
+
+## Performance Configuration
+
+### Thread Optimization (Railway 48-core)
+- **Main Threads**: 32 (67% of 48 cores)
+- **Batch Threads**: 20 (42% of 48 cores)
+- **Environment Variables**: 32 threads for BLAS libraries
+- **Batch Size**: 512 (optimized for high-core systems)
+- **Micro-batch**: 256 (CPU optimization)
+
+### Memory Settings
+- **Context Size**: 2048 (conservative for Railway)
+- **KV Cache**: F16 (stable, no experimental quantization)
+- **Memory Mapping**: Enabled for faster loading
+- **Memory Locking**: Disabled for Railway compatibility
+
+## Usage Examples
+
+### Loading the Model
+```python
+from app.models.llm_handler import llm_handler
+from app.schemas.models import ModelType
+
+success = await llm_handler.load_model(
+    model_name="v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF",
+    model_type=ModelType.GGUF,
+    force_reload=True
+)
+```
+
+### Generation
+```python
+from app.schemas.models import GenerateRequest
+
+request = GenerateRequest(
+    prompt="Explain quantum physics in simple terms",
+    max_tokens=200,
+    temperature=0.7,
+    top_p=0.9
+)
+
+response = await llm_handler.generate(request)
+print(f"Response: {response.text}")
+print(f"Speed: {response.tokens_per_second:.2f} tokens/s")
+```
+
+### Streaming Generation
+```python
+async for chunk in llm_handler.generate_stream(request):
+    print(chunk.delta, end="", flush=True)
+    if chunk.is_final:
+        print(f"\nCompleted: {chunk.tokens_per_second:.2f} tok/s")
+        break
+```
+
+## Expected Performance
+
+### Speed Improvements
+- **Target**: 40-80 tokens/second (vs previous 5 tok/s)
+- **Response Time**: 8-15 seconds for 512 tokens
+- **CPU Utilization**: 67% of 48 cores (vs previous 12.5%)
+
+### Quality Benefits
+- **Q8_0 Quantization**: Higher accuracy than Q4_K_M
+- **Proper Chat Template**: Correct formatting for optimal responses
+- **Uncensored**: More informative responses on sensitive topics
+- **3.6B Parameters**: Good balance of capability and speed
+
+## System Integration
+
+### Automatic Template Selection
+The system automatically chooses the correct chat template based on model name detection, ensuring seamless switching between different model types.
+
+### Backward Compatibility
+The implementation maintains full compatibility with existing TinyDolphin and other ChatML-format models.
+
+### Error Handling
+- Graceful fallback to alternative quantizations if target not found
+- Proper error reporting for model loading failures
+- Memory cleanup on model unloading
+
+## Testing
+
+Run the test script to verify integration:
+
+```bash
+python test_llama32.py
+```
+
+The test covers:
+- Model loading and timing
+- Basic generation
+- Streaming generation
+- Performance metrics
+- Error handling
+
+## Monitoring
+
+### Key Metrics to Watch
+- **CPU Utilization**: Should increase to ~67%
+- **Tokens/Second**: Target 40-80 tok/s
+- **Memory Usage**: Monitor for stability
+- **Generation Quality**: Verify proper response formatting
+
+### Log Messages
+Look for these key log entries:
+```
+INFO - Found target Llama 3.2 Q8_0 file: llama-3.2-3b-instruct-uncensored-q8_0.gguf
+INFO - Detected 48 CPU cores, using 32 threads (batch: 20) for high-performance inference  
+INFO - Model loaded successfully in X.XXs
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Model Not Found**: Verify HuggingFace Hub access
+2. **Memory Issues**: Reduce context size if needed
+3. **Slow Performance**: Check thread utilization logs
+4. **Generation Errors**: Verify stop tokens and chat template
+
+### Performance Tuning
+- Adjust thread count if experiencing contention
+- Monitor memory usage and adjust batch sizes
+- Test different quantizations for speed vs quality trade-offs
+
+## Future Enhancements
+- Support for tool calling (Llama 3.2 feature)
+- Multi-language capabilities
+- Function calling integration
+- Dynamic context window adjustment
+</file>
+
+<file path="main.py">
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"greeting": "Hello, World!", "message": "Welcome to FastAPI!"}
+</file>
+
+<file path="README.md">
+---
+title: FastAPI
+description: A FastAPI server
+tags:
+  - fastapi
+  - hypercorn
+  - python
+---
+
+# FastAPI LLM Inference Server
+
+A production-ready FastAPI server for LLM inference with streaming support, containerized with Docker and deployable to Railway.
+
+## Features
+
+- 🚀 **Production-ready**: Built with FastAPI, proper error handling, and logging
+- 🔄 **Streaming Support**: Real-time text generation with Server-Sent Events
+- 🧠 **Multiple Model Types**: Extensible architecture supporting Hugging Face, GGUF, and Ollama
+- 🔒 **Security**: Optional API key authentication and rate limiting
+- 📊 **Monitoring**: Health checks, memory usage tracking, and uptime monitoring
+- 🐳 **Containerized**: Docker support with multi-stage builds
+- 🚂 **Railway Ready**: Configured for seamless Railway deployment
+
+## Project Structure
+
+```
+fastapi-llm-server/
+├── app/
+│   ├── main.py                  # FastAPI application entrypoint
+│   ├── models/llm_handler.py    # Model loader and inference handler
+│   ├── schemas/models.py        # Pydantic models for API schemas
+│   ├── api/endpoints.py         # REST API endpoints
+│   └── __init__.py
+├── models/                      # Model cache directory
+├── requirements.txt             # Python dependencies
+├── Dockerfile                   # Docker configuration
+├── railway.json                 # Railway deployment configuration
+└── README.md                    # This file
+```
+
+## Quick Start
+
+### Local Development
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd fastapi-llm-server
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set environment variables** (optional)
+   ```bash
+   export MODEL_NAME="microsoft/DialoGPT-small"
+   export MODEL_TYPE="huggingface"
+   export PORT=8000
+   export TRANSFORMERS_CACHE="./models"
+   export HF_HOME="./models"
+   ```
+
+4. **Run the server**
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+5. **Access the API**
+   - API Documentation: http://localhost:8000/docs
+   - Health Check: http://localhost:8000/ping
+   - Model Info: http://localhost:8000/api/v1/model/info
+
+### Docker Deployment
+
+1. **Build the Docker image**
+   ```bash
+   docker build -t fastapi-llm-server .
+   ```
+
+2. **Run the container**
+   ```bash
+   docker run -p 8000:8000 \
+     -e MODEL_NAME="microsoft/DialoGPT-small" \
+     -e MODEL_TYPE="huggingface" \
+     -v $(pwd)/models:/app/models \
+     fastapi-llm-server
+   ```
+
+## API Endpoints
+
+### Text Generation
+
+#### POST `/api/v1/generate`
+Generate text from a prompt (non-streaming).
+
+**Request Body:**
+```json
+{
+  "prompt": "Hello, how are you?",
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "max_tokens": 256,
+  "stop_sequences": ["Human:", "AI:"]
+}
+```
+
+**Response:**
+```json
+{
+  "generated_text": "I'm doing well, thank you for asking!",
+  "prompt": "Hello, how are you?",
+  "model_name": "microsoft/DialoGPT-small",
+  "tokens_generated": 8,
+  "generation_time": 0.45
+}
+```
+
+#### POST `/api/v1/generate/stream`
+Generate text with streaming response using Server-Sent Events.
+
+**Request Body:** Same as `/generate`
+
+**Response:** Stream of JSON chunks:
+```json
+{"text": "I'm", "is_final": false, "tokens_generated": 1}
+{"text": " doing", "is_final": false, "tokens_generated": 2}
+{"text": "", "is_final": true, "tokens_generated": 8}
+```
+
+### Model Management
+
+#### GET `/api/v1/model/info`
+Get information about the currently loaded model.
+
+**Response:**
+```json
+{
+  "name": "microsoft/DialoGPT-small",
+  "type": "huggingface",
+  "loaded": true,
+  "memory_usage": {
+    "system": {"total": 16000000000, "used": 8000000000},
+    "gpu": {"allocated": 1000000000}
+  },
+  "parameters": {
+    "total_params": 117000000,
+    "trainable_params": 117000000
+  },
+  "load_time": 15.2
+}
+```
+
+#### POST `/api/v1/model/load`
+Load a new model on demand.
+
+**Request Body:**
+```json
+{
+  "model_name": "microsoft/DialoGPT-medium",
+  "model_type": "huggingface",
+  "force_reload": false
+}
+```
+
+### Health Monitoring
+
+#### GET `/api/v1/health`
+Detailed health check with system information.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "uptime": 3600.5,
+  "model_loaded": true,
+  "memory_usage": {...},
+  "timestamp": 1699123456.789
+}
+```
+
+#### GET `/api/v1/ping`
+Simple ping endpoint for basic health checks.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "timestamp": 1699123456.789
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODEL_NAME` | `microsoft/DialoGPT-small` | Hugging Face model name |
+| `MODEL_TYPE` | `huggingface` | Model type (huggingface, gguf, ollama) |
+| `PORT` | `8000` | Server port |
+| `HOST` | `0.0.0.0` | Server host |
+| `TRANSFORMERS_CACHE` | `./models` | Model cache directory |
+| `HF_HOME` | `./models` | Hugging Face home directory |
+| `LOAD_MODEL_ON_STARTUP` | `true` | Load model on server startup |
+| `API_KEY` | `None` | Optional API key for authentication |
+
+### Authentication
+
+To enable API key authentication, set the `API_KEY` environment variable:
+
+```bash
+export API_KEY="your-secret-api-key"
+```
+
+Then include the key in requests:
+
+```bash
+curl -H "x-api-key: your-secret-api-key" \
+     -H "Content-Type: application/json" \
+     -d '{"prompt": "Hello!"}' \
+     http://localhost:8000/api/v1/generate
+```
+
+### Rate Limiting
+
+Built-in rate limiting is configured per endpoint:
+- `/generate`: 10 requests/minute
+- `/generate/stream`: 5 requests/minute
+- `/model/load`: 3 requests/minute
+- `/health`: 60 requests/minute
+- `/ping`: 120 requests/minute
+
+## Railway Deployment
+
+### Prerequisites
+
+1. [Railway account](https://railway.app)
+2. Railway CLI installed
+
+### Deployment Steps
+
+1. **Connect to Railway**
+   ```bash
+   railway login
+   railway link
+   ```
+
+2. **Set environment variables**
+   ```bash
+   railway variables set MODEL_NAME=microsoft/DialoGPT-small
+   railway variables set MODEL_TYPE=huggingface
+   railway variables set TRANSFORMERS_CACHE=/app/models
+   railway variables set HF_HOME=/app/models
+   railway variables set LOAD_MODEL_ON_STARTUP=true
+   ```
+
+3. **Deploy**
+   ```bash
+   railway up
+   ```
+
+### Railway Environment Variables
+
+Set these variables in your Railway dashboard:
+
+```ini
+PORT=8000
+MODEL_NAME=microsoft/DialoGPT-small
+MODEL_TYPE=huggingface
+PYTHONPATH=/app
+TRANSFORMERS_CACHE=/app/models
+HF_HOME=/app/models
+LOAD_MODEL_ON_STARTUP=true
+```
+
+## Extending Model Support
+
+The server is designed to be extensible. To add support for new model types:
+
+1. **Add model type to enum** in `app/schemas/models.py`:
+   ```python
+   class ModelType(str, Enum):
+       HUGGINGFACE = "huggingface"
+       GGUF = "gguf"
+       OLLAMA = "ollama"
+       YOUR_MODEL = "your_model"  # Add here
+   ```
+
+2. **Implement loader** in `app/models/llm_handler.py`:
+   ```python
+   async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False):
+       # ... existing code ...
+       elif model_type == ModelType.YOUR_MODEL:
+           await self._load_your_model(model_name)
+   ```
+
+3. **Add dependencies** to `requirements.txt` as needed.
+
+## Performance Optimization
+
+### Memory Management
+
+- Models are cached in the `models/` directory
+- GPU memory is automatically managed by PyTorch
+- System memory usage is monitored and reported
+
+### Scaling
+
+- Use multiple worker processes: `uvicorn app.main:app --workers 4`
+- Deploy multiple instances behind a load balancer
+- Consider GPU acceleration for larger models
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Model loading fails**
+   - Check internet connection for model download
+   - Verify model name and type
+   - Ensure sufficient disk space in cache directory
+
+2. **Out of memory errors**
+   - Use smaller models or reduce batch sizes
+   - Enable CPU offloading for large models
+   - Monitor memory usage via `/api/v1/health`
+
+3. **Slow inference**
+   - Enable GPU acceleration if available
+   - Reduce `max_tokens` in requests
+   - Use model-specific optimizations
+
+### Logs
+
+Check application logs for detailed error information:
+
+```bash
+# Docker logs
+docker logs <container-id>
+
+# Railway logs
+railway logs
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Support
+
+For issues and questions:
+- Check the [documentation](http://localhost:8000/docs)
+- Review the logs for error details
+- Open an issue on the repository
+</file>
+
+<file path="OPTIMIZATION_SUMMARY.md">
+# FastAPI LLM Optimization Implementation Summary
+
+## ✅ Latest Updates - TinyDolphin Model Switch
+
+### **Model Change for Speed**
+- **Previous**: Phi-3.5-mini-instruct_Uncensored (slower)
+- **New**: v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
+- **Benefits**: 
+  - **MoE Architecture**: Mixture of Experts for faster inference
+  - **Optimized Quantization**: Q4_K_M for speed/quality balance
+  - **Better Context Handling**: 2048 tokens efficiently processed
+
+### **Chat Template Update**
+- **Format**: Changed from Phi-3.5 to ChatML format
+- **Template**: `<|im_start|>system/user/assistant<|im_end|>`
+- **Stop Tokens**: `<|im_end|>`, `<|im_start|>`
+
+## ✅ Completed Optimizations
+
+### 1. **Model Loading & Configuration Optimizations**
+- **Model Selection**: TinyDolphin MoE for optimal CPU performance
+- **Context Window**: 2048 tokens (optimized for TinyDolphin)
+- **Threading**: 8 threads for MoE architecture
+- **Batch Size**: 512 for MoE efficiency
+- **Memory Optimizations**: `f16_kv=True`, `mul_mat_q=True`, `numa=False`
+
+### 2. **Direct Inference (No Threading Issues)**
+- **Removed Threading**: Direct execution to avoid deadlocks
+- **Optimized Parameters**: `repeat_penalty=1.05`, `mirostat_mode=0`
+- **Chat Formatting**: Proper ChatML template for TinyDolphin
+
+### 3. **Response Caching System**
+- **In-Memory Cache**: LRU cache with 1-hour TTL for identical requests
+- **Cache Key**: MD5 hash of prompt + parameters for efficient lookup
+- **Auto-Cleanup**: Automatic removal of expired and excess entries
+- **Cache Management**: Added `/cache/clear` and `/cache/stats` endpoints
+
+### 4. **Streaming Optimizations**
+- **Direct Streaming**: No thread pool complications
+- **Better Completion Detection**: `is_final` field with ChatML stop tokens
+- **Reduced Latency**: 0.001s sleep intervals for faster delivery
+
+### 5. **Environment & System Optimizations**
+- **CPU Threading**: Optimal thread counts for math libraries
+- **Railway Optimizations**: Memory allocation tuning for cloud deployment
+- **MoE Optimization**: 8 threads, 512 batch size for Mixture of Experts
+
+### 6. **API Endpoint Improvements**
+- **Increased Rate Limits**: 2-4x higher limits after optimizations
+- **Better Error Handling**: More detailed error responses and logging
+- **Health Check Enhancements**: Added cache statistics and performance metrics
+
+## 📊 Expected Performance Improvements with TinyDolphin
+
+### Response Speed
+- **Target**: 20-40 tokens/second (vs previous 5 tokens/sec)
+- **Total Time**: 15-30 seconds for 512 tokens (vs 100+ seconds)
+- **Instant cache hits** for repeated requests
+
+### Model Benefits
+- **MoE Architecture**: Only activates relevant experts per token
+- **Smaller Active Parameters**: Faster inference despite model complexity
+- **Better Chat Understanding**: Designed for conversational AI
+
+### User Experience
+- **Much Faster Responses**: 3-5x speed improvement
+- **Better Conversation Quality**: Proper ChatML formatting
+- **More Reliable**: Consistent performance without threading issues
+
+## 🛠️ API Configuration
+
+### Model Settings
+- **Default Model**: TinyDolphin-3x-MoE-Q4_K_M
+- **Context Window**: 2048 tokens
+- **Batch Size**: 512
+- **Threads**: 8
+
+### Chat Format
+```
+<|im_start|>system
+You are a helpful AI assistant.<|im_end|>
+<|im_start|>user
+{user_message}<|im_end|>
+<|im_start|>assistant
+```
+
+### Stop Tokens
+- `<|im_end|>`
+- `<|im_start|>`
+
+## 🚀 Deployment Benefits
+
+### Railway Compatibility
+- **Memory Efficient**: Q4_K_M quantization fits 8GB limit
+- **CPU Optimized**: MoE with 8 threads for available cores
+- **Fast Startup**: Optimized model loading process
+
+### Performance Ready
+- **No Threading Issues**: Direct execution prevents deadlocks
+- **Resource Management**: Automatic cleanup and monitoring
+- **Speed Focused**: Every parameter tuned for fast inference
+</file>
+
+<file path="PERFORMANCE_OPTIMIZATIONS.md">
+# Performance Optimizations for Railway 48-Core Deployment
+
+## Overview
+Optimized FastAPI LLM server for Railway's 48-core CPU deployment using research-based threading and batch configurations.
+
+## Key Optimizations Applied
+
+### 1. High-Core CPU Threading
+**Before**: 6 threads (12.5% of 48 cores)
+**After**: 32 threads (67% of 48 cores)
+
+**Research Basis**:
+- Studies show optimal performance at 50-75% of available cores for high-core systems
+- Beyond 75%, threads compete for memory bandwidth rather than compute
+- MoE models can handle higher thread counts due to parallel expert architecture
+
+### 2. Optimized Thread Configuration
+- **Main Threads**: 32 (67% of 48 cores)
+- **Batch Threads**: 20 (42% of 48 cores) 
+- **Environment Variables**: Set to 32 threads for BLAS libraries
+
+### 3. Batch Size Optimization
+**Before**: n_batch=256, n_ubatch=128
+**After**: n_batch=512, n_ubatch=256
+
+**Rationale**: Higher batch sizes better utilize the increased thread count and memory bandwidth.
+
+### 4. Model Selection
+- **Target**: TinyDolphin-3x-MoE-Q4_K_M-GGUF
+- **Quantization**: Q4_K_M for optimal speed/quality balance
+- **Architecture**: Mixture of Experts for efficient parallel processing
+
+### 5. Memory and KV Cache
+- **KV Cache**: F16 (stable, no experimental quantization)
+- **Context Size**: 2048 (conservative for Railway memory limits)
+- **Memory Mapping**: Enabled for faster model loading
+
+## Expected Performance Improvements
+
+### Speed Targets
+- **Current**: ~5 tokens/second
+- **Target**: 40-80 tokens/second (8-16x improvement)
+- **Response Time**: 8-15 seconds for 512 tokens
+
+### Utilization Improvements
+- **CPU Usage**: From 12.5% to 67% of available cores
+- **Thread Efficiency**: Optimized for MoE architecture
+- **Memory Bandwidth**: Better utilization without saturation
+
+## Research Sources
+1. Reddit r/LocalLLaMA CPU optimization discussions
+2. GitHub llama.cpp performance analysis
+3. High-core system benchmarking studies
+4. MoE model threading optimization research
+
+## Monitoring
+- Watch for CPU utilization increases from ~12% to ~67%
+- Monitor memory usage to ensure no saturation
+- Track tokens/second improvements in generation logs
+- Verify stable model loading without context failures
+
+## Notes
+- Configuration automatically scales down for smaller systems (<32 cores)
+- Environment variables prevent BLAS library oversubscription
+- Batch processing optimized for Railway's memory constraints
+</file>
+
+<file path="Dockerfile">
+# Use Python 3.11 slim image for smaller size
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV TRANSFORMERS_CACHE=/app/models
+ENV HF_HOME=/app/models
+ENV MODEL_NAME=v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
+ENV MODEL_TYPE=huggingface
+ENV PORT=8000
+ENV LOAD_MODEL_ON_STARTUP=false
+
+# Create models directory
+RUN mkdir -p /app/models
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app && \
+    chown -R app:app /app
+USER app
+
+# Expose port
+EXPOSE $PORT
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:$PORT/ping || exit 1
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+</file>
+
+<file path="nixpacks.toml">
+[phases.setup]
+aptPkgs = ['libopenblas-dev', 'build-essential', 'cmake', 'git']
+
+[phases.install]
+cmds = [
+  'FORCE_CMAKE=1 CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python==0.3.12 --no-cache-dir --verbose --force-reinstall',
+  'pip install -r requirements.txt'
+]
+</file>
+
+<file path="railway.json">
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "pip install -r requirements.txt"
+  },
+  "deploy": {
+    "startCommand": "python -m app.main",
+    "healthcheckPath": "/ping",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
+</file>
+
+<file path="app/config/templates.yaml">
+# Chat Template Configurations for Different Model Types
+# This configuration allows flexible prompt formatting without hard-coded templates
+
+templates:
+  # Llama 3.x family (3.0, 3.1, 3.2) - Official Instruct format
+  # Note: <|begin_of_text|> is automatically handled by llama_cpp
+  llama-3:
+    patterns: 
+      - "llama-3"
+      - "llama-3.1" 
+      - "llama-3.2"
+      - "llama3"
+    format:
+      system_start: "<|start_header_id|>system<|end_header_id|>\n\n"
+      system_end: "<|eot_id|>"
+      user_start: "<|start_header_id|>user<|end_header_id|>\n\n"
+      user_end: "<|eot_id|>"
+      assistant_start: "<|start_header_id|>assistant<|end_header_id|>\n\n"
+      assistant_end: "<|eot_id|>"
+    stop_tokens: 
+      - "<|eot_id|>"
+      - "<|start_header_id|>"
+      - "<|end_header_id|>"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+  # ChatML format - Used by many modern models (TinyDolphin, Phi-3, etc.)
+  chatml:
+    patterns:
+      - "tinydolphin"
+      - "phi-3"
+      - "phi3"
+      - "chatml"
+      - "default"
+    format:
+      system_start: "<|im_start|>system\n"
+      system_end: "<|im_end|>\n"
+      user_start: "<|im_start|>user\n"
+      user_end: "<|im_end|>\n"
+      assistant_start: "<|im_start|>assistant\n"
+      assistant_end: "<|im_end|>\n"
+    stop_tokens:
+      - "<|im_end|>"
+      - "<|im_start|>"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+  # Mistral/Mixtral format
+  mistral:
+    patterns:
+      - "mistral"
+      - "mixtral"
+    format:
+      system_start: ""
+      system_end: ""
+      user_start: "[INST] "
+      user_end: " [/INST]"
+      assistant_start: ""
+      assistant_end: "</s>"
+    stop_tokens:
+      - "</s>"
+      - "[INST]"
+      - "[/INST]"
+    default_system_message: ""
+
+  # Vicuna format - Used by Wizard-Vicuna models
+  vicuna:
+    patterns:
+      - "wizard-vicuna"
+      - "vicuna"
+      - "thebloke/wizard-vicuna"
+    format:
+      conversation_start: "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. "
+      system_start: ""
+      system_end: ""
+      user_start: "USER: "
+      user_end: " "
+      assistant_start: "ASSISTANT: "
+      assistant_end: ""
+    stop_tokens:
+      - "USER:"
+      - "ASSISTANT:"
+    default_system_message: ""
+
+  # Alpaca format - Common for fine-tuned models
+  alpaca:
+    patterns:
+      - "alpaca"
+    format:
+      system_start: "### System:\n"
+      system_end: "\n\n"
+      user_start: "### Human:\n"
+      user_end: "\n\n"
+      assistant_start: "### Assistant:\n"
+      assistant_end: "\n\n"
+    stop_tokens:
+      - "### Human:"
+      - "### System:"
+      - "### Assistant:"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+  # CodeLlama format
+  codellama:
+    patterns:
+      - "codellama"
+      - "code-llama"
+    format:
+      system_start: "[INST] "
+      system_end: " "
+      user_start: ""
+      user_end: " [/INST]"
+      assistant_start: ""
+      assistant_end: " "
+    stop_tokens:
+      - "[INST]"
+      - "[/INST]"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+# Template resolution order - first match wins
+resolution_order:
+  - "llama-3"
+  - "vicuna"
+  - "mistral" 
+  - "codellama"
+  - "alpaca"
+  - "chatml"  # Fallback for most models
+
+# Global settings
+settings:
+  fallback_template: "chatml"
+  max_context_length: 2048
+  default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+</file>
+
+<file path="repomix-output.txt">
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+
+================================================================
+Directory Structure
+================================================================
+.github/workflows/clean-dev_fastapi-llm-server.yml
+.gitignore
+=0.19.0
+app/__init__.py
+app/api/endpoints.py
+app/config/__init__.py
+app/config/templates.yaml
+app/main.py
+app/schemas/models.py
+DEPLOYMENT_UPDATE.md
+Dockerfile
+env
+fly.toml
+LICENSE.md
+LLAMA32_INTEGRATION.md
+main.py
+nixpacks.toml
+OPTIMIZATION_SUMMARY.md
+PERFORMANCE_OPTIMIZATIONS.md
+railway.json
+README.md
+requirements.txt
+
+================================================================
+Files
+================================================================
+
+================
+File: .github/workflows/clean-dev_fastapi-llm-server.yml
+================
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
+
+name: Build and deploy Python app to Azure Web App - FastAPI-LLM-Server
+
+on:
+  push:
+    branches:
+      - clean-dev
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Create and start virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
+
+      - name: Zip artifact for deployment
+        run: zip release.zip ./* -r
+
+      - name: Upload artifact for deployment jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-app
+          path: |
+            release.zip
+            !venv/
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: python-app
+
+      - name: Unzip artifact for deployment
+        run: unzip release.zip
+
+      
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C09469A5F76B4B1CB34EC391471B1884 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_B2935E34B48940089811B488A80FC3F2 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_414D810E45924B4381323ECDD259ACDE }}
+
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v3
+        id: deploy-to-webapp
+        with:
+          app-name: 'FastAPI-LLM-Server'
+          slot-name: 'Production'
+
+================
+File: .gitignore
+================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/#use-with-ide
+.pdm.toml
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+# Model files (downloaded automatically)
+models/
+*.gguf
+*.safetensors
+*.bin
+
+================
+File: =0.19.0
+================
+Collecting huggingface_hub
+  Using cached huggingface_hub-0.33.2-py3-none-any.whl.metadata (14 kB)
+Collecting filelock (from huggingface_hub)
+  Using cached filelock-3.18.0-py3-none-any.whl.metadata (2.9 kB)
+Collecting fsspec>=2023.5.0 (from huggingface_hub)
+  Downloading fsspec-2025.5.1-py3-none-any.whl.metadata (11 kB)
+Collecting packaging>=20.9 (from huggingface_hub)
+  Using cached packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pyyaml>=5.1 (from huggingface_hub)
+  Downloading PyYAML-6.0.2-cp311-cp311-win_amd64.whl.metadata (2.1 kB)
+Collecting requests (from huggingface_hub)
+  Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+Collecting tqdm>=4.42.1 (from huggingface_hub)
+  Using cached tqdm-4.67.1-py3-none-any.whl.metadata (57 kB)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in c:\users\jmart\appdev\fastapi-llm\venv\lib\site-packages (from huggingface_hub) (4.14.1)
+Collecting colorama (from tqdm>=4.42.1->huggingface_hub)
+  Using cached colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+Collecting charset_normalizer<4,>=2 (from requests->huggingface_hub)
+  Downloading charset_normalizer-3.4.2-cp311-cp311-win_amd64.whl.metadata (36 kB)
+Collecting idna<4,>=2.5 (from requests->huggingface_hub)
+  Using cached idna-3.10-py3-none-any.whl.metadata (10 kB)
+Collecting urllib3<3,>=1.21.1 (from requests->huggingface_hub)
+  Downloading urllib3-2.5.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi>=2017.4.17 (from requests->huggingface_hub)
+  Downloading certifi-2025.7.9-py3-none-any.whl.metadata (2.4 kB)
+Using cached huggingface_hub-0.33.2-py3-none-any.whl (515 kB)
+Downloading fsspec-2025.5.1-py3-none-any.whl (199 kB)
+   ---------------------------------------- 199.1/199.1 kB 3.0 MB/s eta 0:00:00
+Using cached packaging-25.0-py3-none-any.whl (66 kB)
+Downloading PyYAML-6.0.2-cp311-cp311-win_amd64.whl (161 kB)
+   ---------------------------------------- 162.0/162.0 kB 9.5 MB/s eta 0:00:00
+Using cached tqdm-4.67.1-py3-none-any.whl (78 kB)
+Using cached filelock-3.18.0-py3-none-any.whl (16 kB)
+Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+   ---------------------------------------- 64.8/64.8 kB ? eta 0:00:00
+Downloading certifi-2025.7.9-py3-none-any.whl (159 kB)
+   ---------------------------------------- 159.2/159.2 kB ? eta 0:00:00
+Downloading charset_normalizer-3.4.2-cp311-cp311-win_amd64.whl (105 kB)
+   ---------------------------------------- 105.4/105.4 kB 5.9 MB/s eta 0:00:00
+Using cached idna-3.10-py3-none-any.whl (70 kB)
+Downloading urllib3-2.5.0-py3-none-any.whl (129 kB)
+   ---------------------------------------- 129.8/129.8 kB 8.0 MB/s eta 0:00:00
+Using cached colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+Installing collected packages: urllib3, pyyaml, packaging, idna, fsspec, filelock, colorama, charset_normalizer, certifi, tqdm, requests, huggingface_hub
+Successfully installed certifi-2025.7.9 charset_normalizer-3.4.2 colorama-0.4.6 filelock-3.18.0 fsspec-2025.5.1 huggingface_hub-0.33.2 idna-3.10 packaging-25.0 pyyaml-6.0.2 requests-2.32.4 tqdm-4.67.1 urllib3-2.5.0
+
+================
+File: app/__init__.py
+================
+# FastAPI LLM Inference Server
+__version__ = "1.0.0"
+
+================
+File: app/config/__init__.py
+================
+"""Configuration management utilities for chat templates and model settings"""
+
+import yaml
+import logging
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+from functools import lru_cache
+
+logger = logging.getLogger(__name__)
+
+
+class TemplateManager:
+    """Manages chat template loading, caching, and resolution"""
+    
+    def __init__(self, config_path: Optional[Path] = None):
+        """Initialize template manager with optional custom config path"""
+        if config_path is None:
+            config_path = Path(__file__).parent / "templates.yaml"
+        
+        self.config_path = config_path
+        self._templates_cache: Optional[Dict[str, Any]] = None
+    
+    @property
+    def templates(self) -> Dict[str, Any]:
+        """Lazy-loaded templates with caching"""
+        if self._templates_cache is None:
+            self._templates_cache = self._load_templates()
+        return self._templates_cache
+    
+    def _load_templates(self) -> Dict[str, Any]:
+        """Load templates from YAML configuration"""
+        try:
+            if not self.config_path.exists():
+                logger.error(f"Template configuration not found: {self.config_path}")
+                return self._get_fallback_config()
+            
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                logger.info(f"Loaded template configuration from {self.config_path}")
+                return config
+                
+        except Exception as e:
+            logger.error(f"Failed to load template configuration: {e}")
+            return self._get_fallback_config()
+    
+    def _get_fallback_config(self) -> Dict[str, Any]:
+        """Provide minimal fallback configuration if YAML loading fails"""
+        logger.warning("Using fallback template configuration")
+        return {
+            "templates": {
+                "chatml": {
+                    "patterns": ["default"],
+                    "format": {
+                        "system_start": "<|im_start|>system\n",
+                        "system_end": "<|im_end|>\n",
+                        "user_start": "<|im_start|>user\n",
+                        "user_end": "<|im_end|>\n",
+                        "assistant_start": "<|im_start|>assistant\n",
+                        "assistant_end": "<|im_end|>\n"
+                    },
+                    "stop_tokens": ["<|im_end|>", "<|im_start|>"],
+                    "default_system_message": "You are a helpful AI assistant."
+                }
+            },
+            "settings": {
+                "fallback_template": "chatml",
+                "default_system_message": "You are a helpful AI assistant."
+            }
+        }
+    
+    def get_template_for_model(self, model_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get template configuration for a specific model
+        
+        Args:
+            model_name: Name of the model to get template for
+            
+        Returns:
+            Template configuration dict or None if not found
+        """
+        if not model_name:
+            return self._get_fallback_template()
+        
+        model_lower = model_name.lower()
+        templates = self.templates.get("templates", {})
+        
+        # Check resolution order if specified
+        resolution_order = self.templates.get("resolution_order", templates.keys())
+        
+        for template_name in resolution_order:
+            if template_name not in templates:
+                continue
+                
+            template_config = templates[template_name]
+            patterns = template_config.get("patterns", [])
+            
+            # Check if any pattern matches the model name
+            for pattern in patterns:
+                if pattern.lower() in model_lower:
+                    logger.info(f"Selected template '{template_name}' for model '{model_name}' (matched pattern: '{pattern}')")
+                    return template_config
+        
+        # Fallback to default template
+        logger.info(f"No specific template found for model '{model_name}', using fallback")
+        return self._get_fallback_template()
+    
+    def _get_fallback_template(self) -> Dict[str, Any]:
+        """Get the fallback template configuration"""
+        fallback_name = self.templates.get("settings", {}).get("fallback_template", "chatml")
+        templates = self.templates.get("templates", {})
+        
+        if fallback_name in templates:
+            return templates[fallback_name]
+        
+        # If fallback doesn't exist, return the first available template
+        if templates:
+            first_template = next(iter(templates.values()))
+            logger.warning(f"Fallback template '{fallback_name}' not found, using first available template")
+            return first_template
+        
+        # Last resort - return hardcoded minimal config
+        logger.error("No templates available, using hardcoded fallback")
+        return {
+            "format": {
+                "system_start": "<|im_start|>system\n",
+                "system_end": "<|im_end|>\n",
+                "user_start": "<|im_start|>user\n",
+                "user_end": "<|im_end|>\n",
+                "assistant_start": "<|im_start|>assistant\n",
+                "assistant_end": "<|im_end|>\n"
+            },
+            "stop_tokens": ["<|im_end|>", "<|im_start|>"],
+            "default_system_message": "You are a helpful AI assistant."
+        }
+    
+    def get_stop_tokens_for_model(self, model_name: str) -> List[str]:
+        """Get stop tokens for a specific model"""
+        template_config = self.get_template_for_model(model_name)
+        return template_config.get("stop_tokens", ["<|im_end|>"])
+    
+    def get_default_system_message(self, model_name: str) -> str:
+        """Get default system message for a specific model"""
+        template_config = self.get_template_for_model(model_name)
+        return template_config.get(
+            "default_system_message",
+            self.templates.get("settings", {}).get("default_system_message", "You are a helpful AI assistant.")
+        )
+    
+    def reload_templates(self):
+        """Force reload of template configuration"""
+        self._templates_cache = None
+        logger.info("Template configuration cache cleared, will reload on next access")
+    
+    def list_available_templates(self) -> List[str]:
+        """Get list of available template names"""
+        return list(self.templates.get("templates", {}).keys())
+    
+    def validate_template_config(self) -> bool:
+        """Validate that the template configuration is valid"""
+        try:
+            templates = self.templates.get("templates", {})
+            
+            if not templates:
+                logger.error("No templates defined in configuration")
+                return False
+            
+            for name, config in templates.items():
+                # Check required fields
+                if "format" not in config:
+                    logger.error(f"Template '{name}' missing 'format' section")
+                    return False
+                
+                format_config = config["format"]
+                required_format_keys = ["system_start", "system_end", "user_start", "user_end", "assistant_start", "assistant_end"]
+                
+                for key in required_format_keys:
+                    if key not in format_config:
+                        logger.error(f"Template '{name}' format missing required key: '{key}'")
+                        return False
+                
+                if "stop_tokens" not in config or not isinstance(config["stop_tokens"], list):
+                    logger.error(f"Template '{name}' missing or invalid 'stop_tokens'")
+                    return False
+            
+            logger.info("Template configuration validation passed")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Template configuration validation failed: {e}")
+            return False
+
+
+# Global instance for convenient access
+@lru_cache(maxsize=1)
+def get_template_manager() -> TemplateManager:
+    """Get a cached instance of the template manager"""
+    return TemplateManager()
+
+
+def load_templates() -> Dict[str, Any]:
+    """Load chat templates from configuration (legacy function)"""
+    manager = get_template_manager()
+    return manager.templates
+
+================
+File: DEPLOYMENT_UPDATE.md
+================
+# Deployment Update: Llama 3.2 3B Instruct Model
+
+## Changes Made
+
+### 1. Updated Default Model Configuration
+**File**: `app/main.py`
+- Changed default MODEL_NAME to `v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF`
+- Changed default MODEL_TYPE to `gguf`
+- Enabled LOAD_MODEL_ON_STARTUP by default
+
+### 2. Updated Environment Configuration
+**File**: `env`
+- Updated MODEL_NAME to Llama 3.2 3B Instruct model
+- Changed MODEL_TYPE from `huggingface` to `gguf`
+- Maintained LOAD_MODEL_ON_STARTUP=true
+
+### 3. Implementation Features
+- **Automatic Model Detection**: System detects Llama 3.2 models and applies correct chat template
+- **Optimized Threading**: 32 threads (67% of 48 cores) for maximum performance
+- **Q8_0 Quantization**: Higher accuracy than previous Q4_K_M quantization
+- **Proper Stop Tokens**: Uses Llama 3.2 specific tokens (`<|eot_id|>`, etc.)
+
+## Railway Deployment
+
+### Environment Variables to Set (Optional Override)
+If you need to override the defaults on Railway, set these environment variables:
+
+```bash
+MODEL_NAME=v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF
+MODEL_TYPE=gguf
+LOAD_MODEL_ON_STARTUP=true
+```
+
+### Expected Startup Logs
+After deployment, you should see logs like:
+```
+INFO - Loading model: v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF (type: ModelType.GGUF)
+INFO - Found target Llama 3.2 Q8_0 file: llama-3.2-3b-instruct-uncensored-q8_0.gguf
+INFO - Detected 48 CPU cores, using 32 threads (batch: 20) for high-performance inference
+INFO - Model loaded successfully in X.XXs
+```
+
+### Performance Expectations
+- **Model Size**: ~3.6GB (Q8_0 quantization)
+- **Load Time**: 8-15 seconds
+- **Generation Speed**: 40-80 tokens/second (8-16x improvement)
+- **CPU Utilization**: ~67% of 48 cores
+- **Memory Usage**: More efficient with better quantization
+
+## Verification
+
+### Test the New Model
+1. **Basic Generation Test**:
+   ```bash
+   curl -X POST "https://your-railway-app.railway.app/api/v1/generate" \
+   -H "Content-Type: application/json" \
+   -d '{
+     "prompt": "What is the capital of France?",
+     "max_tokens": 100,
+     "temperature": 0.7
+   }'
+   ```
+
+2. **Model Info Check**:
+   ```bash
+   curl "https://your-railway-app.railway.app/api/v1/model/info"
+   ```
+
+### Expected Response Format
+The model should respond with proper Llama 3.2 formatting and improved quality due to Q8_0 quantization.
+
+## Rollback Plan
+If issues occur, you can quickly rollback by setting these Railway environment variables:
+```bash
+MODEL_NAME=v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
+MODEL_TYPE=huggingface
+```
+
+## Next Steps
+1. Deploy the updated code to Railway
+2. Monitor startup logs for successful model loading
+3. Test generation performance and quality
+4. Verify CPU utilization improvements (~67%)
+5. Benchmark token generation speed (target: 40-80 tok/s)
+
+================
+File: fly.toml
+================
+# Fly.io configuration for FastAPI LLM application
+app = "your-app-name-here"  # Replace with your actual app name
+primary_region = "iad"      # Replace with your preferred region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PYTHONPATH = "/app"
+  PYTHONUNBUFFERED = "1"
+  TRANSFORMERS_CACHE = "/app/models"
+  HF_HOME = "/app/models"
+  MODEL_NAME = "v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF"
+  MODEL_TYPE = "huggingface"
+  PORT = "8000"
+  LOAD_MODEL_ON_STARTUP = "false"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/ping"
+
+[processes]
+  app = "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024
+
+================
+File: LICENSE.md
+================
+The MIT License (MIT)
+
+Copyright (c) 2022 Himesh Samarasekera
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+================
+File: LLAMA32_INTEGRATION.md
+================
+# Llama 3.2 3B Instruct Integration
+
+## Overview
+Successfully integrated support for `v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF` model with proper chat template formatting and optimized configuration for Railway's 48-core deployment.
+
+## Model Specifications
+
+### Basic Info
+- **Model**: v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF
+- **Base Model**: chuanli11/Llama-3.2-3B-Instruct-uncensored
+- **Parameters**: 3.61B
+- **Quantization**: Q8_0 (8-bit for high accuracy)
+- **Architecture**: Llama 3.2 Instruct
+- **Context Window**: Supports up to 128k (configured to 2048 for Railway memory limits)
+
+### Key Features
+- **Uncensored**: Designed to provide information on sensitive topics responsibly
+- **Instruction-tuned**: Optimized for conversational dialogue
+- **High Accuracy**: Q8_0 quantization maintains model quality
+- **Fast Inference**: Optimized for CPU deployment with 32 threads
+
+## Implementation Details
+
+### Chat Template Format
+The model uses the official Llama 3.2/3.x Instruct chat template:
+
+```
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+{system_message}<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{user_message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+{assistant_response}<|eot_id|>
+```
+
+### Stop Tokens
+- `<|eot_id|>` - End of turn
+- `<|start_header_id|>` - Start of header
+- `<|end_header_id|>` - End of header
+
+### Automatic Model Detection
+The system automatically detects Llama 3.2/3.x models and applies appropriate formatting:
+
+```python
+if self.model_name and ("llama-3.2" in self.model_name.lower() or "llama-3" in self.model_name.lower()):
+    # Use Llama 3.2 format
+else:
+    # Use ChatML format for other models
+```
+
+### Quantization Priority
+For Llama 3.2 models, the system prioritizes:
+1. **Q8_0** - Target for high accuracy
+2. **Q4_K_M** - Good speed/quality balance
+3. **Q5_K_M** - Higher quality fallback
+4. **Q4_K_S** - Backup option
+5. **Q4_0** - Fast fallback
+
+## Performance Configuration
+
+### Thread Optimization (Railway 48-core)
+- **Main Threads**: 32 (67% of 48 cores)
+- **Batch Threads**: 20 (42% of 48 cores)
+- **Environment Variables**: 32 threads for BLAS libraries
+- **Batch Size**: 512 (optimized for high-core systems)
+- **Micro-batch**: 256 (CPU optimization)
+
+### Memory Settings
+- **Context Size**: 2048 (conservative for Railway)
+- **KV Cache**: F16 (stable, no experimental quantization)
+- **Memory Mapping**: Enabled for faster loading
+- **Memory Locking**: Disabled for Railway compatibility
+
+## Usage Examples
+
+### Loading the Model
+```python
+from app.models.llm_handler import llm_handler
+from app.schemas.models import ModelType
+
+success = await llm_handler.load_model(
+    model_name="v8karlo/Llama-3.2-3B-Instruct-uncensored-Q8_0-GGUF",
+    model_type=ModelType.GGUF,
+    force_reload=True
+)
+```
+
+### Generation
+```python
+from app.schemas.models import GenerateRequest
+
+request = GenerateRequest(
+    prompt="Explain quantum physics in simple terms",
+    max_tokens=200,
+    temperature=0.7,
+    top_p=0.9
+)
+
+response = await llm_handler.generate(request)
+print(f"Response: {response.text}")
+print(f"Speed: {response.tokens_per_second:.2f} tokens/s")
+```
+
+### Streaming Generation
+```python
+async for chunk in llm_handler.generate_stream(request):
+    print(chunk.delta, end="", flush=True)
+    if chunk.is_final:
+        print(f"\nCompleted: {chunk.tokens_per_second:.2f} tok/s")
+        break
+```
+
+## Expected Performance
+
+### Speed Improvements
+- **Target**: 40-80 tokens/second (vs previous 5 tok/s)
+- **Response Time**: 8-15 seconds for 512 tokens
+- **CPU Utilization**: 67% of 48 cores (vs previous 12.5%)
+
+### Quality Benefits
+- **Q8_0 Quantization**: Higher accuracy than Q4_K_M
+- **Proper Chat Template**: Correct formatting for optimal responses
+- **Uncensored**: More informative responses on sensitive topics
+- **3.6B Parameters**: Good balance of capability and speed
+
+## System Integration
+
+### Automatic Template Selection
+The system automatically chooses the correct chat template based on model name detection, ensuring seamless switching between different model types.
+
+### Backward Compatibility
+The implementation maintains full compatibility with existing TinyDolphin and other ChatML-format models.
+
+### Error Handling
+- Graceful fallback to alternative quantizations if target not found
+- Proper error reporting for model loading failures
+- Memory cleanup on model unloading
+
+## Testing
+
+Run the test script to verify integration:
+
+```bash
+python test_llama32.py
+```
+
+The test covers:
+- Model loading and timing
+- Basic generation
+- Streaming generation
+- Performance metrics
+- Error handling
+
+## Monitoring
+
+### Key Metrics to Watch
+- **CPU Utilization**: Should increase to ~67%
+- **Tokens/Second**: Target 40-80 tok/s
+- **Memory Usage**: Monitor for stability
+- **Generation Quality**: Verify proper response formatting
+
+### Log Messages
+Look for these key log entries:
+```
+INFO - Found target Llama 3.2 Q8_0 file: llama-3.2-3b-instruct-uncensored-q8_0.gguf
+INFO - Detected 48 CPU cores, using 32 threads (batch: 20) for high-performance inference  
+INFO - Model loaded successfully in X.XXs
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Model Not Found**: Verify HuggingFace Hub access
+2. **Memory Issues**: Reduce context size if needed
+3. **Slow Performance**: Check thread utilization logs
+4. **Generation Errors**: Verify stop tokens and chat template
+
+### Performance Tuning
+- Adjust thread count if experiencing contention
+- Monitor memory usage and adjust batch sizes
+- Test different quantizations for speed vs quality trade-offs
+
+## Future Enhancements
+- Support for tool calling (Llama 3.2 feature)
+- Multi-language capabilities
+- Function calling integration
+- Dynamic context window adjustment
+
+================
+File: main.py
+================
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"greeting": "Hello, World!", "message": "Welcome to FastAPI!"}
+
+================
+File: README.md
+================
+---
+title: FastAPI
+description: A FastAPI server
+tags:
+  - fastapi
+  - hypercorn
+  - python
+---
+
+# FastAPI LLM Inference Server
+
+A production-ready FastAPI server for LLM inference with streaming support, containerized with Docker and deployable to Railway.
+
+## Features
+
+- 🚀 **Production-ready**: Built with FastAPI, proper error handling, and logging
+- 🔄 **Streaming Support**: Real-time text generation with Server-Sent Events
+- 🧠 **Multiple Model Types**: Extensible architecture supporting Hugging Face, GGUF, and Ollama
+- 🔒 **Security**: Optional API key authentication and rate limiting
+- 📊 **Monitoring**: Health checks, memory usage tracking, and uptime monitoring
+- 🐳 **Containerized**: Docker support with multi-stage builds
+- 🚂 **Railway Ready**: Configured for seamless Railway deployment
+
+## Project Structure
+
+```
+fastapi-llm-server/
+├── app/
+│   ├── main.py                  # FastAPI application entrypoint
+│   ├── models/llm_handler.py    # Model loader and inference handler
+│   ├── schemas/models.py        # Pydantic models for API schemas
+│   ├── api/endpoints.py         # REST API endpoints
+│   └── __init__.py
+├── models/                      # Model cache directory
+├── requirements.txt             # Python dependencies
+├── Dockerfile                   # Docker configuration
+├── railway.json                 # Railway deployment configuration
+└── README.md                    # This file
+```
+
+## Quick Start
+
+### Local Development
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd fastapi-llm-server
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set environment variables** (optional)
+   ```bash
+   export MODEL_NAME="microsoft/DialoGPT-small"
+   export MODEL_TYPE="huggingface"
+   export PORT=8000
+   export TRANSFORMERS_CACHE="./models"
+   export HF_HOME="./models"
+   ```
+
+4. **Run the server**
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+5. **Access the API**
+   - API Documentation: http://localhost:8000/docs
+   - Health Check: http://localhost:8000/ping
+   - Model Info: http://localhost:8000/api/v1/model/info
+
+### Docker Deployment
+
+1. **Build the Docker image**
+   ```bash
+   docker build -t fastapi-llm-server .
+   ```
+
+2. **Run the container**
+   ```bash
+   docker run -p 8000:8000 \
+     -e MODEL_NAME="microsoft/DialoGPT-small" \
+     -e MODEL_TYPE="huggingface" \
+     -v $(pwd)/models:/app/models \
+     fastapi-llm-server
+   ```
+
+## API Endpoints
+
+### Text Generation
+
+#### POST `/api/v1/generate`
+Generate text from a prompt (non-streaming).
+
+**Request Body:**
+```json
+{
+  "prompt": "Hello, how are you?",
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "max_tokens": 256,
+  "stop_sequences": ["Human:", "AI:"]
+}
+```
+
+**Response:**
+```json
+{
+  "generated_text": "I'm doing well, thank you for asking!",
+  "prompt": "Hello, how are you?",
+  "model_name": "microsoft/DialoGPT-small",
+  "tokens_generated": 8,
+  "generation_time": 0.45
+}
+```
+
+#### POST `/api/v1/generate/stream`
+Generate text with streaming response using Server-Sent Events.
+
+**Request Body:** Same as `/generate`
+
+**Response:** Stream of JSON chunks:
+```json
+{"text": "I'm", "is_final": false, "tokens_generated": 1}
+{"text": " doing", "is_final": false, "tokens_generated": 2}
+{"text": "", "is_final": true, "tokens_generated": 8}
+```
+
+### Model Management
+
+#### GET `/api/v1/model/info`
+Get information about the currently loaded model.
+
+**Response:**
+```json
+{
+  "name": "microsoft/DialoGPT-small",
+  "type": "huggingface",
+  "loaded": true,
+  "memory_usage": {
+    "system": {"total": 16000000000, "used": 8000000000},
+    "gpu": {"allocated": 1000000000}
+  },
+  "parameters": {
+    "total_params": 117000000,
+    "trainable_params": 117000000
+  },
+  "load_time": 15.2
+}
+```
+
+#### POST `/api/v1/model/load`
+Load a new model on demand.
+
+**Request Body:**
+```json
+{
+  "model_name": "microsoft/DialoGPT-medium",
+  "model_type": "huggingface",
+  "force_reload": false
+}
+```
+
+### Health Monitoring
+
+#### GET `/api/v1/health`
+Detailed health check with system information.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "uptime": 3600.5,
+  "model_loaded": true,
+  "memory_usage": {...},
+  "timestamp": 1699123456.789
+}
+```
+
+#### GET `/api/v1/ping`
+Simple ping endpoint for basic health checks.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "timestamp": 1699123456.789
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODEL_NAME` | `microsoft/DialoGPT-small` | Hugging Face model name |
+| `MODEL_TYPE` | `huggingface` | Model type (huggingface, gguf, ollama) |
+| `PORT` | `8000` | Server port |
+| `HOST` | `0.0.0.0` | Server host |
+| `TRANSFORMERS_CACHE` | `./models` | Model cache directory |
+| `HF_HOME` | `./models` | Hugging Face home directory |
+| `LOAD_MODEL_ON_STARTUP` | `true` | Load model on server startup |
+| `API_KEY` | `None` | Optional API key for authentication |
+
+### Authentication
+
+To enable API key authentication, set the `API_KEY` environment variable:
+
+```bash
+export API_KEY="your-secret-api-key"
+```
+
+Then include the key in requests:
+
+```bash
+curl -H "x-api-key: your-secret-api-key" \
+     -H "Content-Type: application/json" \
+     -d '{"prompt": "Hello!"}' \
+     http://localhost:8000/api/v1/generate
+```
+
+### Rate Limiting
+
+Built-in rate limiting is configured per endpoint:
+- `/generate`: 10 requests/minute
+- `/generate/stream`: 5 requests/minute
+- `/model/load`: 3 requests/minute
+- `/health`: 60 requests/minute
+- `/ping`: 120 requests/minute
+
+## Railway Deployment
+
+### Prerequisites
+
+1. [Railway account](https://railway.app)
+2. Railway CLI installed
+
+### Deployment Steps
+
+1. **Connect to Railway**
+   ```bash
+   railway login
+   railway link
+   ```
+
+2. **Set environment variables**
+   ```bash
+   railway variables set MODEL_NAME=microsoft/DialoGPT-small
+   railway variables set MODEL_TYPE=huggingface
+   railway variables set TRANSFORMERS_CACHE=/app/models
+   railway variables set HF_HOME=/app/models
+   railway variables set LOAD_MODEL_ON_STARTUP=true
+   ```
+
+3. **Deploy**
+   ```bash
+   railway up
+   ```
+
+### Railway Environment Variables
+
+Set these variables in your Railway dashboard:
+
+```ini
+PORT=8000
+MODEL_NAME=microsoft/DialoGPT-small
+MODEL_TYPE=huggingface
+PYTHONPATH=/app
+TRANSFORMERS_CACHE=/app/models
+HF_HOME=/app/models
+LOAD_MODEL_ON_STARTUP=true
+```
+
+## Extending Model Support
+
+The server is designed to be extensible. To add support for new model types:
+
+1. **Add model type to enum** in `app/schemas/models.py`:
+   ```python
+   class ModelType(str, Enum):
+       HUGGINGFACE = "huggingface"
+       GGUF = "gguf"
+       OLLAMA = "ollama"
+       YOUR_MODEL = "your_model"  # Add here
+   ```
+
+2. **Implement loader** in `app/models/llm_handler.py`:
+   ```python
+   async def load_model(self, model_name: str, model_type: ModelType = ModelType.HUGGINGFACE, force_reload: bool = False):
+       # ... existing code ...
+       elif model_type == ModelType.YOUR_MODEL:
+           await self._load_your_model(model_name)
+   ```
+
+3. **Add dependencies** to `requirements.txt` as needed.
+
+## Performance Optimization
+
+### Memory Management
+
+- Models are cached in the `models/` directory
+- GPU memory is automatically managed by PyTorch
+- System memory usage is monitored and reported
+
+### Scaling
+
+- Use multiple worker processes: `uvicorn app.main:app --workers 4`
+- Deploy multiple instances behind a load balancer
+- Consider GPU acceleration for larger models
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Model loading fails**
+   - Check internet connection for model download
+   - Verify model name and type
+   - Ensure sufficient disk space in cache directory
+
+2. **Out of memory errors**
+   - Use smaller models or reduce batch sizes
+   - Enable CPU offloading for large models
+   - Monitor memory usage via `/api/v1/health`
+
+3. **Slow inference**
+   - Enable GPU acceleration if available
+   - Reduce `max_tokens` in requests
+   - Use model-specific optimizations
+
+### Logs
+
+Check application logs for detailed error information:
+
+```bash
+# Docker logs
+docker logs <container-id>
+
+# Railway logs
+railway logs
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Support
+
+For issues and questions:
+- Check the [documentation](http://localhost:8000/docs)
+- Review the logs for error details
+- Open an issue on the repository
+
+================
+File: OPTIMIZATION_SUMMARY.md
+================
+# FastAPI LLM Optimization Implementation Summary
+
+## ✅ Latest Updates - TinyDolphin Model Switch
+
+### **Model Change for Speed**
+- **Previous**: Phi-3.5-mini-instruct_Uncensored (slower)
+- **New**: v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
+- **Benefits**: 
+  - **MoE Architecture**: Mixture of Experts for faster inference
+  - **Optimized Quantization**: Q4_K_M for speed/quality balance
+  - **Better Context Handling**: 2048 tokens efficiently processed
+
+### **Chat Template Update**
+- **Format**: Changed from Phi-3.5 to ChatML format
+- **Template**: `<|im_start|>system/user/assistant<|im_end|>`
+- **Stop Tokens**: `<|im_end|>`, `<|im_start|>`
+
+## ✅ Completed Optimizations
+
+### 1. **Model Loading & Configuration Optimizations**
+- **Model Selection**: TinyDolphin MoE for optimal CPU performance
+- **Context Window**: 2048 tokens (optimized for TinyDolphin)
+- **Threading**: 8 threads for MoE architecture
+- **Batch Size**: 512 for MoE efficiency
+- **Memory Optimizations**: `f16_kv=True`, `mul_mat_q=True`, `numa=False`
+
+### 2. **Direct Inference (No Threading Issues)**
+- **Removed Threading**: Direct execution to avoid deadlocks
+- **Optimized Parameters**: `repeat_penalty=1.05`, `mirostat_mode=0`
+- **Chat Formatting**: Proper ChatML template for TinyDolphin
+
+### 3. **Response Caching System**
+- **In-Memory Cache**: LRU cache with 1-hour TTL for identical requests
+- **Cache Key**: MD5 hash of prompt + parameters for efficient lookup
+- **Auto-Cleanup**: Automatic removal of expired and excess entries
+- **Cache Management**: Added `/cache/clear` and `/cache/stats` endpoints
+
+### 4. **Streaming Optimizations**
+- **Direct Streaming**: No thread pool complications
+- **Better Completion Detection**: `is_final` field with ChatML stop tokens
+- **Reduced Latency**: 0.001s sleep intervals for faster delivery
+
+### 5. **Environment & System Optimizations**
+- **CPU Threading**: Optimal thread counts for math libraries
+- **Railway Optimizations**: Memory allocation tuning for cloud deployment
+- **MoE Optimization**: 8 threads, 512 batch size for Mixture of Experts
+
+### 6. **API Endpoint Improvements**
+- **Increased Rate Limits**: 2-4x higher limits after optimizations
+- **Better Error Handling**: More detailed error responses and logging
+- **Health Check Enhancements**: Added cache statistics and performance metrics
+
+## 📊 Expected Performance Improvements with TinyDolphin
+
+### Response Speed
+- **Target**: 20-40 tokens/second (vs previous 5 tokens/sec)
+- **Total Time**: 15-30 seconds for 512 tokens (vs 100+ seconds)
+- **Instant cache hits** for repeated requests
+
+### Model Benefits
+- **MoE Architecture**: Only activates relevant experts per token
+- **Smaller Active Parameters**: Faster inference despite model complexity
+- **Better Chat Understanding**: Designed for conversational AI
+
+### User Experience
+- **Much Faster Responses**: 3-5x speed improvement
+- **Better Conversation Quality**: Proper ChatML formatting
+- **More Reliable**: Consistent performance without threading issues
+
+## 🛠️ API Configuration
+
+### Model Settings
+- **Default Model**: TinyDolphin-3x-MoE-Q4_K_M
+- **Context Window**: 2048 tokens
+- **Batch Size**: 512
+- **Threads**: 8
+
+### Chat Format
+```
+<|im_start|>system
+You are a helpful AI assistant.<|im_end|>
+<|im_start|>user
+{user_message}<|im_end|>
+<|im_start|>assistant
+```
+
+### Stop Tokens
+- `<|im_end|>`
+- `<|im_start|>`
+
+## 🚀 Deployment Benefits
+
+### Railway Compatibility
+- **Memory Efficient**: Q4_K_M quantization fits 8GB limit
+- **CPU Optimized**: MoE with 8 threads for available cores
+- **Fast Startup**: Optimized model loading process
+
+### Performance Ready
+- **No Threading Issues**: Direct execution prevents deadlocks
+- **Resource Management**: Automatic cleanup and monitoring
+- **Speed Focused**: Every parameter tuned for fast inference
+
+================
+File: PERFORMANCE_OPTIMIZATIONS.md
+================
+# Performance Optimizations for Railway 48-Core Deployment
+
+## Overview
+Optimized FastAPI LLM server for Railway's 48-core CPU deployment using research-based threading and batch configurations.
+
+## Key Optimizations Applied
+
+### 1. High-Core CPU Threading
+**Before**: 6 threads (12.5% of 48 cores)
+**After**: 32 threads (67% of 48 cores)
+
+**Research Basis**:
+- Studies show optimal performance at 50-75% of available cores for high-core systems
+- Beyond 75%, threads compete for memory bandwidth rather than compute
+- MoE models can handle higher thread counts due to parallel expert architecture
+
+### 2. Optimized Thread Configuration
+- **Main Threads**: 32 (67% of 48 cores)
+- **Batch Threads**: 20 (42% of 48 cores) 
+- **Environment Variables**: Set to 32 threads for BLAS libraries
+
+### 3. Batch Size Optimization
+**Before**: n_batch=256, n_ubatch=128
+**After**: n_batch=512, n_ubatch=256
+
+**Rationale**: Higher batch sizes better utilize the increased thread count and memory bandwidth.
+
+### 4. Model Selection
+- **Target**: TinyDolphin-3x-MoE-Q4_K_M-GGUF
+- **Quantization**: Q4_K_M for optimal speed/quality balance
+- **Architecture**: Mixture of Experts for efficient parallel processing
+
+### 5. Memory and KV Cache
+- **KV Cache**: F16 (stable, no experimental quantization)
+- **Context Size**: 2048 (conservative for Railway memory limits)
+- **Memory Mapping**: Enabled for faster model loading
+
+## Expected Performance Improvements
+
+### Speed Targets
+- **Current**: ~5 tokens/second
+- **Target**: 40-80 tokens/second (8-16x improvement)
+- **Response Time**: 8-15 seconds for 512 tokens
+
+### Utilization Improvements
+- **CPU Usage**: From 12.5% to 67% of available cores
+- **Thread Efficiency**: Optimized for MoE architecture
+- **Memory Bandwidth**: Better utilization without saturation
+
+## Research Sources
+1. Reddit r/LocalLLaMA CPU optimization discussions
+2. GitHub llama.cpp performance analysis
+3. High-core system benchmarking studies
+4. MoE model threading optimization research
+
+## Monitoring
+- Watch for CPU utilization increases from ~12% to ~67%
+- Monitor memory usage to ensure no saturation
+- Track tokens/second improvements in generation logs
+- Verify stable model loading without context failures
+
+## Notes
+- Configuration automatically scales down for smaller systems (<32 cores)
+- Environment variables prevent BLAS library oversubscription
+- Batch processing optimized for Railway's memory constraints
+
+================
+File: Dockerfile
+================
+# Use Python 3.11 slim image for smaller size
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV TRANSFORMERS_CACHE=/app/models
+ENV HF_HOME=/app/models
+ENV MODEL_NAME=v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
+ENV MODEL_TYPE=huggingface
+ENV PORT=8000
+ENV LOAD_MODEL_ON_STARTUP=false
+
+# Create models directory
+RUN mkdir -p /app/models
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app && \
+    chown -R app:app /app
+USER app
+
+# Expose port
+EXPOSE $PORT
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:$PORT/ping || exit 1
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+
+================
+File: nixpacks.toml
+================
+[phases.setup]
+aptPkgs = ['libopenblas-dev', 'build-essential', 'cmake', 'git']
+
+[phases.install]
+cmds = [
+  'FORCE_CMAKE=1 CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python==0.3.12 --no-cache-dir --verbose --force-reinstall',
+  'pip install -r requirements.txt'
+]
+
+================
+File: railway.json
+================
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "pip install -r requirements.txt"
+  },
+  "deploy": {
+    "startCommand": "python -m app.main",
+    "healthcheckPath": "/ping",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
+
+================
+File: app/config/templates.yaml
+================
+# Chat Template Configurations for Different Model Types
+# This configuration allows flexible prompt formatting without hard-coded templates
+
+templates:
+  # Llama 3.x family (3.0, 3.1, 3.2) - Official Instruct format
+  # Note: <|begin_of_text|> is automatically handled by llama_cpp
+  llama-3:
+    patterns: 
+      - "llama-3"
+      - "llama-3.1" 
+      - "llama-3.2"
+      - "llama3"
+    format:
+      system_start: "<|start_header_id|>system<|end_header_id|>\n\n"
+      system_end: "<|eot_id|>"
+      user_start: "<|start_header_id|>user<|end_header_id|>\n\n"
+      user_end: "<|eot_id|>"
+      assistant_start: "<|start_header_id|>assistant<|end_header_id|>\n\n"
+      assistant_end: "<|eot_id|>"
+    stop_tokens: 
+      - "<|eot_id|>"
+      - "<|start_header_id|>"
+      - "<|end_header_id|>"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+  # ChatML format - Used by many modern models (TinyDolphin, Phi-3, etc.)
+  chatml:
+    patterns:
+      - "tinydolphin"
+      - "phi-3"
+      - "phi3"
+      - "chatml"
+      - "default"
+    format:
+      system_start: "<|im_start|>system\n"
+      system_end: "<|im_end|>\n"
+      user_start: "<|im_start|>user\n"
+      user_end: "<|im_end|>\n"
+      assistant_start: "<|im_start|>assistant\n"
+      assistant_end: "<|im_end|>\n"
+    stop_tokens:
+      - "<|im_end|>"
+      - "<|im_start|>"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+  # Mistral/Mixtral format
+  mistral:
+    patterns:
+      - "mistral"
+      - "mixtral"
+    format:
+      system_start: ""
+      system_end: ""
+      user_start: "[INST] "
+      user_end: " [/INST]"
+      assistant_start: ""
+      assistant_end: "</s>"
+    stop_tokens:
+      - "</s>"
+      - "[INST]"
+      - "[/INST]"
+    default_system_message: ""
+
+  # Vicuna format - Used by Wizard-Vicuna models
+  vicuna:
+    patterns:
+      - "wizard-vicuna"
+      - "vicuna"
+      - "thebloke/wizard-vicuna"
+    format:
+      conversation_start: "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. "
+      system_start: ""
+      system_end: ""
+      user_start: "USER: "
+      user_end: " "
+      assistant_start: "ASSISTANT: "
+      assistant_end: ""
+    stop_tokens:
+      - "USER:"
+      - "ASSISTANT:"
+    default_system_message: ""
+
+  # Alpaca format - Common for fine-tuned models
+  alpaca:
+    patterns:
+      - "alpaca"
+    format:
+      system_start: "### System:\n"
+      system_end: "\n\n"
+      user_start: "### Human:\n"
+      user_end: "\n\n"
+      assistant_start: "### Assistant:\n"
+      assistant_end: "\n\n"
+    stop_tokens:
+      - "### Human:"
+      - "### System:"
+      - "### Assistant:"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+  # CodeLlama format
+  codellama:
+    patterns:
+      - "codellama"
+      - "code-llama"
+    format:
+      system_start: "[INST] "
+      system_end: " "
+      user_start: ""
+      user_end: " [/INST]"
+      assistant_start: ""
+      assistant_end: " "
+    stop_tokens:
+      - "[INST]"
+      - "[/INST]"
+    default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+# Template resolution order - first match wins
+resolution_order:
+  - "llama-3"
+  - "vicuna"
+  - "mistral" 
+  - "codellama"
+  - "alpaca"
+  - "chatml"  # Fallback for most models
+
+# Global settings
+settings:
+  fallback_template: "chatml"
+  max_context_length: 2048
+  default_system_message: "You are a helpful and uncensored assistant. Always answer honestly and without censorship."
+
+================
+File: app/api/endpoints.py
+================
+import os
+import time
+import logging
+from typing import Optional, Dict, Any
+import json
+import hashlib
+from functools import lru_cache
+
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+from app.schemas.models import (
+    GenerateRequest, 
+    GenerateResponse, 
+    ModelInfo, 
+    ModelLoadRequest, 
+    HealthResponse,
+    ErrorResponse
+)
+from app.models.llm_handler import llm_handler
+import redis.asyncio as redis
+
+logger = logging.getLogger(__name__)
+
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address)
+router = APIRouter()
+
+# Security setup
+security = HTTPBearer(auto_error=False)
+
+# API Key authentication
+API_KEY = os.getenv("API_KEY")
+
+# Redis connection setup with optimized pooling
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+# OPTIMIZED Redis client with connection pooling
+redis_client = redis.from_url(
+    REDIS_URL, 
+    decode_responses=True,
+    max_connections=20,          # Connection pool size
+    retry_on_timeout=True,       # Retry on timeout
+    socket_connect_timeout=5,    # Connection timeout
+    socket_timeout=5,            # Socket timeout
+    health_check_interval=30     # Health check every 30s
+)
+
+# Comment out the in-memory cache for reference
+# response_cache: Dict[str, tuple[GenerateResponse, float]] = {}
+# CACHE_TTL = 3600  # 1 hour
+CACHE_TTL = 3600  # 1 hour
+
+async def get_cached_response(cache_key: str):
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            # Use compressed JSON deserialization for better performance
+            import json
+            import gzip
+            import base64
+            
+            try:
+                # Try compressed format first
+                compressed_data = base64.b64decode(cached)
+                decompressed_data = gzip.decompress(compressed_data)
+                data = json.loads(decompressed_data.decode('utf-8'))
+                return GenerateResponse.model_validate(data)
+            except:
+                # Fallback to regular JSON
+                return GenerateResponse.model_validate_json(cached)
+    except Exception as e:
+        logger.error(f"Redis get error: {e}")
+    return None
+
+async def cache_response(cache_key: str, response: GenerateResponse, ttl: int = CACHE_TTL):
+    try:
+        # Use compressed JSON serialization for better performance
+        import json
+        import gzip
+        import base64
+        
+        # Serialize and compress
+        json_data = response.model_dump_json()
+        compressed_data = gzip.compress(json_data.encode('utf-8'))
+        encoded_data = base64.b64encode(compressed_data).decode('utf-8')
+        
+        await redis_client.setex(cache_key, ttl, encoded_data)
+    except Exception as e:
+        logger.error(f"Redis set error: {e}")
+
+async def clear_response_cache():
+    try:
+        # Use pipeline for better performance when clearing multiple keys
+        async with redis_client.pipeline() as pipe:
+            keys = await redis_client.keys("cache:*")
+            if keys:
+                for key in keys:
+                    pipe.delete(key)
+                await pipe.execute()
+    except Exception as e:
+        logger.error(f"Redis clear error: {e}")
+
+async def get_cache_stats():
+    try:
+        # Use pipeline for multiple Redis operations
+        async with redis_client.pipeline() as pipe:
+            pipe.keys("cache:*")
+            pipe.info("memory")
+            results = await pipe.execute()
+            
+            keys = results[0] if results else []
+            memory_info = results[1] if len(results) > 1 else {}
+            
+            return {
+                "cache_keys": len(keys),
+                "memory_usage": memory_info.get("used_memory_human", "unknown"),
+                "redis_connections": memory_info.get("connected_clients", "unknown")
+            }
+    except Exception as e:
+        logger.error(f"Redis stats error: {e}")
+        return {"cache_keys": 0, "memory_usage": "unknown", "redis_connections": "unknown"}
+
+# Response caching
+# @lru_cache(maxsize=100)
+def get_cache_key(prompt: str, max_tokens: int, temperature: float, top_p: float) -> str:
+    """Generate cache key for request"""
+    content = f"{prompt}_{max_tokens}_{temperature}_{top_p}"
+    return hashlib.md5(content.encode()).hexdigest()
+
+def verify_api_key(x_api_key: Optional[str] = Header(None)) -> bool:
+    """Verify API key if configured"""
+    if API_KEY is None:
+        return True  # No API key required
+    
+    if x_api_key is None:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required. Please provide x-api-key header."
+        )
+    
+    if x_api_key != API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+    
+    return True
+
+
+@router.post("/generate")
+@limiter.limit("20/minute")  # Increased rate limit after optimizations
+async def generate_text(
+    request: Request,
+    generate_request: GenerateRequest,
+    _: bool = Depends(verify_api_key)
+):
+    """Generate text from prompt with caching and thread pool optimization"""
+    try:
+        if generate_request.stream:
+            raise HTTPException(
+                status_code=400,
+                detail="Use /generate/stream endpoint for streaming responses"
+            )
+        
+        # Check cache first for identical requests
+        cache_key = f"cache:{get_cache_key(generate_request.prompt, generate_request.max_tokens, generate_request.temperature, generate_request.top_p)}"
+        cached_response = await get_cached_response(cache_key)
+        if cached_response:
+            logger.info(f"Returning cached response for key: {cache_key[:16]}")
+            return cached_response
+        
+        # OPTIMIZATION: Move LLM inference to thread pool to prevent event loop blocking
+        import asyncio
+        response = await asyncio.to_thread(llm_handler.generate_sync, generate_request)
+        
+        await cache_response(cache_key, response)
+        
+        return response
+        
+    except RuntimeError as e:
+        logger.error(f"Generation error: {str(e)}")
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in generate: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/generate/stream")
+@limiter.limit("10/minute")  # Increased rate limit for streaming
+async def generate_stream(
+    request: Request,
+    generate_request: GenerateRequest,
+    _: bool = Depends(verify_api_key)
+):
+    """OPTIMIZED streaming response with proper async generator and thread pool"""
+    try:
+        # CRITICAL FIX: Proper async generator implementation
+        async def optimized_stream_generator():
+            """Optimized async generator that prevents Starlette streaming bug"""
+            import asyncio
+            import json
+            
+            # Buffer chunks for better performance
+            chunk_buffer = []
+            buffer_size = 3  # Send chunks in groups of 3
+            
+            try:
+                # Move streaming to thread pool to prevent event loop blocking
+                async for chunk in llm_handler.generate_stream_async(generate_request):
+                    # Format as Server-Sent Events with optimized JSON serialization
+                    data = json.dumps(chunk.dict(), separators=(',', ':'))  # Compact JSON
+                    chunk_buffer.append(f"data: {data}\n\n")
+                    
+                    # Batch send for better network efficiency
+                    if len(chunk_buffer) >= buffer_size or chunk.is_final:
+                        # Send all buffered chunks at once
+                        for buffered_chunk in chunk_buffer:
+                            yield buffered_chunk
+                        chunk_buffer = []
+                        
+                        # Small delay to prevent overwhelming client
+                        if not chunk.is_final:
+                            await asyncio.sleep(0.001)  # 1ms delay
+                    
+                    # Check if this is the final chunk
+                    if chunk.is_final:
+                        yield "data: [DONE]\n\n"
+                        break
+                        
+            except Exception as e:
+                # Send error in SSE format
+                error_data = json.dumps({"error": str(e)})
+                yield f"data: {error_data}\n\n"
+                yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(
+            optimized_stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Connection": "keep-alive", 
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+                "Access-Control-Allow-Origin": "*",  # CORS for streaming
+                "Access-Control-Expose-Headers": "*"
+            }
+        )
+        
+    except RuntimeError as e:
+        logger.error(f"Streaming generation error: {str(e)}")
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in generate_stream: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/model/info", response_model=ModelInfo)
+@limiter.limit("60/minute")  # Increased rate limit for info endpoint
+async def get_model_info(
+    request: Request,
+    _: bool = Depends(verify_api_key)
+):
+    """Get information about the currently loaded model"""
+    try:
+        return llm_handler.get_model_info()
+    except Exception as e:
+        logger.error(f"Error getting model info: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/model/load")
+@limiter.limit("5/minute")  # Slightly increased rate limit for model loading
+async def load_model(
+    request: Request,
+    load_request: ModelLoadRequest,
+    _: bool = Depends(verify_api_key)
+):
+    """Load a model on demand with cache clearing"""
+    try:
+        # Clear response cache when loading a new model
+        await clear_response_cache()
+        logger.info("Cleared response cache due to model change")
+        
+        success = await llm_handler.load_model(
+            load_request.model_name,
+            load_request.model_type,
+            load_request.force_reload,
+            load_request.preferred_quant
+        )
+        
+        if success:
+            return {"message": f"Model {load_request.model_name} loaded successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to load model")
+            
+    except ValueError as e:
+        logger.error(f"Invalid model load request: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error loading model: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/health", response_model=HealthResponse)
+@limiter.limit("120/minute")  # Increased rate limit for health checks
+async def health_check(request: Request):
+    """Detailed health check endpoint with performance metrics"""
+    try:
+        # Calculate uptime (this would need to be tracked from app startup)
+        uptime = time.time() - getattr(health_check, 'start_time', time.time())
+        
+        # Add cache statistics
+        cache_stats = {
+            "cache_size": await get_cache_stats()["cache_keys"]
+        }
+        
+        memory_usage = llm_handler.get_memory_usage()
+        memory_usage["cache_stats"] = cache_stats
+        
+        return HealthResponse(
+            status="healthy",
+            uptime=uptime,
+            model_loaded=llm_handler.is_loaded(),
+            memory_usage=memory_usage
+        )
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return HealthResponse(
+            status="unhealthy",
+            uptime=0,
+            model_loaded=False,
+            memory_usage=None
+        )
+
+
+@router.get("/ping")
+@limiter.limit("240/minute")  # Increased rate limit for ping endpoint
+async def ping(request: Request):
+    """Simple ping endpoint for Railway health checks"""
+    return {"status": "ok", "timestamp": time.time()}
+
+
+# Cache management endpoints
+@router.post("/cache/clear")
+@limiter.limit("10/minute")
+async def clear_cache(
+    request: Request,
+    _: bool = Depends(verify_api_key)
+):
+    """Clear the response cache"""
+    await clear_response_cache()
+    return {"message": "Cache cleared successfully"}
+
+
+@router.get("/cache/stats")
+@limiter.limit("30/minute")
+async def get_cache_stats(
+    request: Request,
+    _: bool = Depends(verify_api_key)
+):
+    """Get cache statistics"""
+    return await get_cache_stats()
+
+
+# Store start time for uptime calculation
+health_check.start_time = time.time()
+health_check.cache_hits = 0
+health_check.total_requests = 0
+
+================
+File: env
+================
+MODEL_NAME=TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF
+MODEL_TYPE=gguf
+LOAD_MODEL_ON_STARTUP=true
+API_KEY=your_secret_key  # Optional
+PORT=8000
+HOST=0.0.0.0
+WORKERS=8                   
+LLM_THREADS_MAIN=6          
+LLM_THREADS_BATCH=4        
+LLM_MAX_CONTEXT=1024
+
+================
+File: requirements.txt
+================
+# FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# LLM and ML dependencies
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.24.0
+tokenizers>=0.15.0
+
+# System monitoring
+psutil>=5.9.0
+
+# Rate limiting
+slowapi>=0.1.9
+
+# Additional utilities
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+pyyaml>=6.0
+
+# GGUF support with Phi-3/Phi-4 architecture support (latest version)
+llama-cpp-python==0.3.12
+huggingface-hub>=0.19.0
+
+# Optional: For Ollama support (future)
+# ollama>=0.1.0
+redis[asyncio]>=4.6.0
+httpx>=0.25.0
+
+================
+File: app/schemas/models.py
+================
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from typing import Optional, Dict, Any, List
+from enum import Enum
+import time
+
+
+class ModelType(str, Enum):
+    """Supported model types for extensibility"""
+    HUGGINGFACE = "huggingface"
+    GGUF = "gguf"
+    OLLAMA = "ollama"
+
+
+class ChatMessage(BaseModel):
+    """Individual message in a conversation"""
+    role: str = Field(..., description="Message role: system, user, assistant")
+    content: str = Field(..., description="Message content")
+    
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        if v not in ['system', 'user', 'assistant']:
+            raise ValueError('Role must be one of: system, user, assistant')
+        return v
+    
+    @model_validator(mode='after')
+    def validate_content_by_role(self):
+        """Allow empty content for system messages, but require content for user/assistant"""
+        if self.role in ['user', 'assistant'] and len(self.content.strip()) == 0:
+            raise ValueError(f'{self.role} messages must have non-empty content')
+        return self
+
+
+class GenerateRequest(BaseModel):
+    """Enhanced request schema supporting both single prompts and multi-turn conversations"""
+    # Legacy support - single prompt
+    prompt: Optional[str] = Field(None, description="Single input text prompt (legacy mode)", min_length=1)
+    
+    # New multi-turn conversation support
+    messages: Optional[List[ChatMessage]] = Field(None, description="Multi-turn conversation messages")
+    
+    # Core generation parameters
+    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
+    top_p: float = Field(0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter")
+    max_tokens: int = Field(512, ge=1, le=2048, description="Maximum tokens to generate")
+    stop_sequences: Optional[List[str]] = Field(None, description="Stop sequences")
+    stream: bool = Field(False, description="Enable streaming response")
+    
+    # Advanced generation parameters (previously hardcoded)
+    repeat_penalty: float = Field(1.05, ge=0.1, le=2.0, description="Repetition penalty to reduce repetitive text")
+    frequency_penalty: float = Field(0.0, ge=-2.0, le=2.0, description="Frequency penalty for token repetition")
+    presence_penalty: float = Field(0.0, ge=-2.0, le=2.0, description="Presence penalty for new token introduction")
+    tfs_z: float = Field(1.0, ge=0.0, le=1.0, description="Tail free sampling parameter")
+    typical_p: float = Field(1.0, ge=0.0, le=1.0, description="Typical sampling parameter")
+    mirostat_mode: int = Field(0, ge=0, le=2, description="Mirostat sampling mode (0=disabled, 1=v1, 2=v2)")
+    mirostat_tau: float = Field(5.0, ge=0.0, le=10.0, description="Mirostat target entropy")
+    mirostat_eta: float = Field(0.1, ge=0.0, le=1.0, description="Mirostat learning rate")
+    
+    @model_validator(mode='after')
+    def validate_prompt_or_messages(self):
+        """Ensure either prompt or messages is provided, but not both"""
+        prompt = self.prompt
+        messages = self.messages
+        
+        if not prompt and not messages:
+            raise ValueError("Either 'prompt' or 'messages' must be provided")
+        if prompt and messages:
+            raise ValueError("Provide either 'prompt' OR 'messages', not both")
+        
+        # Validate messages if provided
+        if messages and len(messages) == 0:
+            raise ValueError("Messages list cannot be empty")
+            
+        return self
+
+
+class GenerateResponse(BaseModel):
+    """Response schema for text generation"""
+    text: str = Field(..., description="Generated text output")
+    tokens_generated: int = Field(..., description="Number of tokens generated")
+    generation_time: float = Field(..., description="Time taken for generation in seconds")
+    tokens_per_second: float = Field(..., description="Generation speed in tokens per second")
+
+
+class StreamChunk(BaseModel):
+    """Schema for streaming response chunks"""
+    delta: str = Field(..., description="Generated text chunk")
+    tokens_generated: int = Field(0, description="Total tokens generated so far")
+    generation_time: float = Field(0.0, description="Time elapsed since generation started")
+    tokens_per_second: float = Field(0.0, description="Current generation speed")
+    is_final: bool = Field(False, description="Whether this is the final chunk")
+
+
+class ModelInfo(BaseModel):
+    """Model information response"""
+    model_config = ConfigDict(protected_namespaces=())
+    
+    name: str = Field(..., description="Model name")
+    type: ModelType = Field(..., description="Model type")
+    loaded: bool = Field(..., description="Whether model is currently loaded")
+    memory_usage: Optional[Dict[str, Any]] = Field(None, description="Memory usage statistics")
+    load_time: Optional[float] = Field(None, description="Time taken to load model")
+
+
+class ModelLoadRequest(BaseModel):
+    """Request schema for loading a model"""
+    model_config = ConfigDict(protected_namespaces=())
+    
+    model_name: str = Field(..., description="Name of the model to load")
+    model_type: ModelType = Field(ModelType.HUGGINGFACE, description="Type of model to load")
+    force_reload: bool = Field(False, description="Force reload even if already loaded")
+    preferred_quant: Optional[str] = Field(None, description="Preferred quantization (e.g., 'Q4_K_M', 'Q8_0'). If not found, falls back to defaults.")
+
+
+class HealthResponse(BaseModel):
+    """Health check response"""
+    model_config = ConfigDict(protected_namespaces=())
+    
+    status: str = Field(..., description="Service status")
+    uptime: float = Field(..., description="Service uptime in seconds")
+    model_loaded: bool = Field(..., description="Whether a model is currently loaded")
+    memory_usage: Optional[Dict[str, Any]] = Field(None, description="System memory usage")
+    timestamp: float = Field(default_factory=time.time, description="Response timestamp")
+
+
+class ErrorResponse(BaseModel):
+    """Error response schema"""
+    error: str = Field(..., description="Error message")
+    detail: Optional[str] = Field(None, description="Detailed error information")
+    timestamp: float = Field(default_factory=time.time, description="Error timestamp")
+
+================
+File: app/main.py
+================
+import os
+import logging
+import asyncio
+from contextlib import asynccontextmanager
+import httpx
+
+# Environment optimizations for CPU inference
+os.environ["OMP_NUM_THREADS"] = str(os.cpu_count())
+os.environ["MKL_NUM_THREADS"] = str(os.cpu_count())
+os.environ["OPENBLAS_NUM_THREADS"] = str(os.cpu_count())
+os.environ["VECLIB_MAXIMUM_THREADS"] = str(os.cpu_count())
+os.environ["NUMEXPR_NUM_THREADS"] = str(os.cpu_count())
+
+# Enable Railway-specific optimizations
+if os.getenv("RAILWAY_ENVIRONMENT"):
+    os.environ["MALLOC_TRIM_THRESHOLD_"] = "100000"
+    os.environ["MALLOC_MMAP_THRESHOLD_"] = "131072"
+
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.base import BaseHTTPMiddleware
+
+from app.api.endpoints import router, limiter
+from app.models.llm_handler import llm_handler
+from app.schemas.models import ModelType
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Configuration from environment variables
+MODEL_NAME = os.getenv("MODEL_NAME", "TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF")
+MODEL_TYPE = os.getenv("MODEL_TYPE", "gguf") 
+LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "true").lower() == "true"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    logger.info("Starting FastAPI LLM Inference Server")
+    logger.info(f"Model: {MODEL_NAME} (Type: {MODEL_TYPE})")
+    logger.info(f"Load on startup: {LOAD_MODEL_ON_STARTUP}")
+
+    # Create a global HTTPX async client with OPTIMIZED connection pooling
+    app.state.http_client = httpx.AsyncClient(
+        limits=httpx.Limits(
+            max_keepalive_connections=50,    # Increased keepalive connections
+            max_connections=200,             # Increased max connections
+            keepalive_expiry=30.0           # Keep connections alive for 30s
+        ),
+        timeout=httpx.Timeout(
+            connect=10.0,    # Connection timeout
+            read=60.0,       # Read timeout for LLM responses
+            write=10.0,      # Write timeout
+            pool=5.0         # Pool timeout
+        ),
+        http2=True,          # Enable HTTP/2 for better performance
+        follow_redirects=True
+    )
+    
+    # Load model on startup if configured
+    if LOAD_MODEL_ON_STARTUP:
+        try:
+            logger.info("Loading model on startup...")
+            model_type = ModelType(MODEL_TYPE)
+            await llm_handler.load_model(MODEL_NAME, model_type)
+            logger.info("Model loaded successfully on startup")
+        except Exception as e:
+            logger.error(f"Failed to load model on startup: {str(e)}")
+            logger.info("Server will start without a loaded model")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down FastAPI LLM Inference Server")
+    # Properly close the HTTPX client
+    await app.state.http_client.aclose()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="FastAPI LLM Inference Server",
+    description="Production-ready FastAPI server for LLM inference with streaming support",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+
+# Add CORS middleware with optimized settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],  # Limit to needed methods
+    allow_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
+)
+
+# Add GZip compression middleware for faster responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Add performance headers middleware
+class PerformanceMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Add performance headers
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Server"] = "FastAPI-LLM"
+        return response
+
+app.add_middleware(PerformanceMiddleware)
+
+# Add rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Include API routes
+app.include_router(router, prefix="/api/v1")
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint with basic server information"""
+    return {
+        "message": "FastAPI LLM Inference Server",
+        "version": "1.0.0",
+        "model_loaded": llm_handler.is_loaded(),
+        "current_model": llm_handler.model_name if llm_handler.is_loaded() else None,
+        "endpoints": {
+            "generate": "/api/v1/generate",
+            "generate_stream": "/api/v1/generate/stream",
+            "model_info": "/api/v1/model/info",
+            "model_load": "/api/v1/model/load",
+            "health": "/api/v1/health",
+            "ping": "/api/v1/ping"
+        }
+    }
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unhandled errors"""
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "detail": "An unexpected error occurred"
+        }
+    )
+
+
+# Health check endpoint (duplicate for Railway)
+@app.get("/ping")
+async def ping():
+    """Simple ping endpoint for Railway health checks"""
+    return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+    workers = int(os.getenv("WORKERS", "1"))  # Default single worker, set via env
+    
+    # For Railway deployment with 48 cores, consider:
+    # WORKERS=8-16 (conservative for shared environment)
+    # For local development, keep workers=1
+    
+    if workers > 1:
+        logger.info(f"Starting with {workers} workers for multi-core performance")
+        # Use gunicorn for multi-worker deployment
+        # Railway: set WORKERS=8 in environment variables
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            workers=workers,
+            reload=False,
+            log_level="info",
+            access_log=False,      # Disable access logs for performance
+            use_colors=False,      # Disable colors in production
+            loop="uvloop",         # Use faster event loop if available
+            http="httptools"       # Use faster HTTP parser if available
+        )
+    else:
+        # Single worker mode (development)
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            reload=False,
+            log_level="info",
+            loop="uvloop",         # Use faster event loop if available
+            http="httptools"       # Use faster HTTP parser if available
+        )
+
+
+
+
+================================================================
+End of Codebase
+================================================================
+</file>
+
+<file path="app/api/endpoints.py">
+import os
+import time
+import logging
+from typing import Optional, Dict, Any
+import json
+import hashlib
+from functools import lru_cache
+
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+from app.schemas.models import (
+    GenerateRequest, 
+    GenerateResponse, 
+    ModelInfo, 
+    ModelLoadRequest, 
+    HealthResponse,
+    ErrorResponse
+)
+from app.models.llm_handler import llm_handler
+import redis.asyncio as redis
+
+logger = logging.getLogger(__name__)
+
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address)
+router = APIRouter()
+
+# Security setup
+security = HTTPBearer(auto_error=False)
+
+# API Key authentication
+API_KEY = os.getenv("API_KEY")
+
+# Redis connection setup with optimized pooling
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+# OPTIMIZED Redis client with connection pooling
+redis_client = redis.from_url(
+    REDIS_URL, 
+    decode_responses=True,
+    max_connections=20,          # Connection pool size
+    retry_on_timeout=True,       # Retry on timeout
+    socket_connect_timeout=5,    # Connection timeout
+    socket_timeout=5,            # Socket timeout
+    health_check_interval=30     # Health check every 30s
+)
+
+# Comment out the in-memory cache for reference
+# response_cache: Dict[str, tuple[GenerateResponse, float]] = {}
+# CACHE_TTL = 3600  # 1 hour
+CACHE_TTL = 3600  # 1 hour
+
+async def get_cached_response(cache_key: str):
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            # Use compressed JSON deserialization for better performance
+            import json
+            import gzip
+            import base64
+            
+            try:
+                # Try compressed format first
+                compressed_data = base64.b64decode(cached)
+                decompressed_data = gzip.decompress(compressed_data)
+                data = json.loads(decompressed_data.decode('utf-8'))
+                return GenerateResponse.model_validate(data)
+            except:
+                # Fallback to regular JSON
+                return GenerateResponse.model_validate_json(cached)
+    except Exception as e:
+        logger.error(f"Redis get error: {e}")
+    return None
+
+async def cache_response(cache_key: str, response: GenerateResponse, ttl: int = CACHE_TTL):
+    try:
+        # Use compressed JSON serialization for better performance
+        import json
+        import gzip
+        import base64
+        
+        # Serialize and compress
+        json_data = response.model_dump_json()
+        compressed_data = gzip.compress(json_data.encode('utf-8'))
+        encoded_data = base64.b64encode(compressed_data).decode('utf-8')
+        
+        await redis_client.setex(cache_key, ttl, encoded_data)
+    except Exception as e:
+        logger.error(f"Redis set error: {e}")
+
+async def clear_response_cache():
+    try:
+        # Use pipeline for better performance when clearing multiple keys
+        async with redis_client.pipeline() as pipe:
+            keys = await redis_client.keys("cache:*")
+            if keys:
+                for key in keys:
+                    pipe.delete(key)
+                await pipe.execute()
+    except Exception as e:
+        logger.error(f"Redis clear error: {e}")
+
+async def get_cache_stats():
+    try:
+        # Use pipeline for multiple Redis operations
+        async with redis_client.pipeline() as pipe:
+            pipe.keys("cache:*")
+            pipe.info("memory")
+            results = await pipe.execute()
+            
+            keys = results[0] if results else []
+            memory_info = results[1] if len(results) > 1 else {}
+            
+            return {
+                "cache_keys": len(keys),
+                "memory_usage": memory_info.get("used_memory_human", "unknown"),
+                "redis_connections": memory_info.get("connected_clients", "unknown")
+            }
+    except Exception as e:
+        logger.error(f"Redis stats error: {e}")
+        return {"cache_keys": 0, "memory_usage": "unknown", "redis_connections": "unknown"}
+
+# Response caching
+# @lru_cache(maxsize=100)
+def get_cache_key(prompt: str, max_tokens: int, temperature: float, top_p: float) -> str:
+    """Generate cache key for request"""
+    content = f"{prompt}_{max_tokens}_{temperature}_{top_p}"
+    return hashlib.md5(content.encode()).hexdigest()
+
+def verify_api_key(x_api_key: Optional[str] = Header(None)) -> bool:
+    """Verify API key if configured"""
+    if API_KEY is None:
+        return True  # No API key required
+    
+    if x_api_key is None:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required. Please provide x-api-key header."
+        )
+    
+    if x_api_key != API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+    
+    return True
+
+
+@router.post("/generate")
+@limiter.limit("20/minute")  # Increased rate limit after optimizations
+async def generate_text(
+    request: Request,
+    generate_request: GenerateRequest,
+    _: bool = Depends(verify_api_key)
+):
+    """Generate text from prompt with caching and thread pool optimization"""
+    try:
+        if generate_request.stream:
+            raise HTTPException(
+                status_code=400,
+                detail="Use /generate/stream endpoint for streaming responses"
+            )
+        
+        # Check cache first for identical requests
+        cache_key = f"cache:{get_cache_key(generate_request.prompt, generate_request.max_tokens, generate_request.temperature, generate_request.top_p)}"
+        cached_response = await get_cached_response(cache_key)
+        if cached_response:
+            logger.info(f"Returning cached response for key: {cache_key[:16]}")
+            return cached_response
+        
+        # OPTIMIZATION: Move LLM inference to thread pool to prevent event loop blocking
+        import asyncio
+        response = await asyncio.to_thread(llm_handler.generate_sync, generate_request)
+        
+        await cache_response(cache_key, response)
+        
+        return response
+        
+    except RuntimeError as e:
+        logger.error(f"Generation error: {str(e)}")
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in generate: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/generate/stream")
+@limiter.limit("10/minute")  # Increased rate limit for streaming
+async def generate_stream(
+    request: Request,
+    generate_request: GenerateRequest,
+    _: bool = Depends(verify_api_key)
+):
+    """OPTIMIZED streaming response with proper async generator and thread pool"""
+    try:
+        # CRITICAL FIX: Proper async generator implementation
+        async def optimized_stream_generator():
+            """Optimized async generator that prevents Starlette streaming bug"""
+            import asyncio
+            import json
+            
+            # Buffer chunks for better performance
+            chunk_buffer = []
+            buffer_size = 3  # Send chunks in groups of 3
+            
+            try:
+                # Move streaming to thread pool to prevent event loop blocking
+                async for chunk in llm_handler.generate_stream_async(generate_request):
+                    # Format as Server-Sent Events with optimized JSON serialization
+                    data = json.dumps(chunk.dict(), separators=(',', ':'))  # Compact JSON
+                    chunk_buffer.append(f"data: {data}\n\n")
+                    
+                    # Batch send for better network efficiency
+                    if len(chunk_buffer) >= buffer_size or chunk.is_final:
+                        # Send all buffered chunks at once
+                        for buffered_chunk in chunk_buffer:
+                            yield buffered_chunk
+                        chunk_buffer = []
+                        
+                        # Small delay to prevent overwhelming client
+                        if not chunk.is_final:
+                            await asyncio.sleep(0.001)  # 1ms delay
+                    
+                    # Check if this is the final chunk
+                    if chunk.is_final:
+                        yield "data: [DONE]\n\n"
+                        break
+                        
+            except Exception as e:
+                # Send error in SSE format
+                error_data = json.dumps({"error": str(e)})
+                yield f"data: {error_data}\n\n"
+                yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(
+            optimized_stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Connection": "keep-alive", 
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+                "Access-Control-Allow-Origin": "*",  # CORS for streaming
+                "Access-Control-Expose-Headers": "*"
+            }
+        )
+        
+    except RuntimeError as e:
+        logger.error(f"Streaming generation error: {str(e)}")
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in generate_stream: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/model/info", response_model=ModelInfo)
+@limiter.limit("60/minute")  # Increased rate limit for info endpoint
+async def get_model_info(
+    request: Request,
+    _: bool = Depends(verify_api_key)
+):
+    """Get information about the currently loaded model"""
+    try:
+        return llm_handler.get_model_info()
+    except Exception as e:
+        logger.error(f"Error getting model info: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/model/load")
+@limiter.limit("5/minute")  # Slightly increased rate limit for model loading
+async def load_model(
+    request: Request,
+    load_request: ModelLoadRequest,
+    _: bool = Depends(verify_api_key)
+):
+    """Load a model on demand with cache clearing"""
+    try:
+        # Clear response cache when loading a new model
+        await clear_response_cache()
+        logger.info("Cleared response cache due to model change")
+        
+        success = await llm_handler.load_model(
+            load_request.model_name,
+            load_request.model_type,
+            load_request.force_reload,
+            load_request.preferred_quant
+        )
+        
+        if success:
+            return {"message": f"Model {load_request.model_name} loaded successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to load model")
+            
+    except ValueError as e:
+        logger.error(f"Invalid model load request: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error loading model: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/health", response_model=HealthResponse)
+@limiter.limit("120/minute")  # Increased rate limit for health checks
+async def health_check(request: Request):
+    """Detailed health check endpoint with performance metrics"""
+    try:
+        # Calculate uptime (this would need to be tracked from app startup)
+        uptime = time.time() - getattr(health_check, 'start_time', time.time())
+        
+        # Add cache statistics
+        cache_stats = {
+            "cache_size": await get_cache_stats()["cache_keys"]
+        }
+        
+        memory_usage = llm_handler.get_memory_usage()
+        memory_usage["cache_stats"] = cache_stats
+        
+        return HealthResponse(
+            status="healthy",
+            uptime=uptime,
+            model_loaded=llm_handler.is_loaded(),
+            memory_usage=memory_usage
+        )
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return HealthResponse(
+            status="unhealthy",
+            uptime=0,
+            model_loaded=False,
+            memory_usage=None
+        )
+
+
+@router.get("/ping")
+@limiter.limit("240/minute")  # Increased rate limit for ping endpoint
+async def ping(request: Request):
+    """Simple ping endpoint for Railway health checks"""
+    return {"status": "ok", "timestamp": time.time()}
+
+
+# Cache management endpoints
+@router.post("/cache/clear")
+@limiter.limit("10/minute")
+async def clear_cache(
+    request: Request,
+    _: bool = Depends(verify_api_key)
+):
+    """Clear the response cache"""
+    await clear_response_cache()
+    return {"message": "Cache cleared successfully"}
+
+
+@router.get("/cache/stats")
+@limiter.limit("30/minute")
+async def get_cache_stats(
+    request: Request,
+    _: bool = Depends(verify_api_key)
+):
+    """Get cache statistics"""
+    return await get_cache_stats()
+
+
+# Store start time for uptime calculation
+health_check.start_time = time.time()
+health_check.cache_hits = 0
+health_check.total_requests = 0
+</file>
+
+<file path="env">
+MODEL_NAME=TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF
+MODEL_TYPE=gguf
+LOAD_MODEL_ON_STARTUP=true
+API_KEY=your_secret_key  # Optional
+PORT=8000
+HOST=0.0.0.0
+WORKERS=8                   
+LLM_THREADS_MAIN=6          
+LLM_THREADS_BATCH=4        
+LLM_MAX_CONTEXT=1024
+</file>
+
+<file path="requirements.txt">
+# FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# LLM and ML dependencies
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.24.0
+tokenizers>=0.15.0
+
+# System monitoring
+psutil>=5.9.0
+
+# Rate limiting
+slowapi>=0.1.9
+
+# Additional utilities
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+pyyaml>=6.0
+
+# GGUF support with Phi-3/Phi-4 architecture support (latest version)
+llama-cpp-python==0.3.12
+huggingface-hub>=0.19.0
+
+# Optional: For Ollama support (future)
+# ollama>=0.1.0
+redis[asyncio]>=4.6.0
+httpx>=0.25.0
+</file>
+
+<file path="app/schemas/models.py">
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from typing import Optional, Dict, Any, List
+from enum import Enum
+import time
+
+
+class ModelType(str, Enum):
+    """Supported model types for extensibility"""
+    HUGGINGFACE = "huggingface"
+    GGUF = "gguf"
+    OLLAMA = "ollama"
+
+
+class ChatMessage(BaseModel):
+    """Individual message in a conversation"""
+    role: str = Field(..., description="Message role: system, user, assistant")
+    content: str = Field(..., description="Message content")
+    
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        if v not in ['system', 'user', 'assistant']:
+            raise ValueError('Role must be one of: system, user, assistant')
+        return v
+    
+    @model_validator(mode='after')
+    def validate_content_by_role(self):
+        """Allow empty content for system messages, but require content for user/assistant"""
+        if self.role in ['user', 'assistant'] and len(self.content.strip()) == 0:
+            raise ValueError(f'{self.role} messages must have non-empty content')
+        return self
+
+
+class GenerateRequest(BaseModel):
+    """Enhanced request schema supporting both single prompts and multi-turn conversations"""
+    # Legacy support - single prompt
+    prompt: Optional[str] = Field(None, description="Single input text prompt (legacy mode)", min_length=1)
+    
+    # New multi-turn conversation support
+    messages: Optional[List[ChatMessage]] = Field(None, description="Multi-turn conversation messages")
+    
+    # Core generation parameters
+    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
+    top_p: float = Field(0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter")
+    max_tokens: int = Field(512, ge=1, le=2048, description="Maximum tokens to generate")
+    stop_sequences: Optional[List[str]] = Field(None, description="Stop sequences")
+    stream: bool = Field(False, description="Enable streaming response")
+    
+    # Advanced generation parameters (previously hardcoded)
+    repeat_penalty: float = Field(1.05, ge=0.1, le=2.0, description="Repetition penalty to reduce repetitive text")
+    frequency_penalty: float = Field(0.0, ge=-2.0, le=2.0, description="Frequency penalty for token repetition")
+    presence_penalty: float = Field(0.0, ge=-2.0, le=2.0, description="Presence penalty for new token introduction")
+    tfs_z: float = Field(1.0, ge=0.0, le=1.0, description="Tail free sampling parameter")
+    typical_p: float = Field(1.0, ge=0.0, le=1.0, description="Typical sampling parameter")
+    mirostat_mode: int = Field(0, ge=0, le=2, description="Mirostat sampling mode (0=disabled, 1=v1, 2=v2)")
+    mirostat_tau: float = Field(5.0, ge=0.0, le=10.0, description="Mirostat target entropy")
+    mirostat_eta: float = Field(0.1, ge=0.0, le=1.0, description="Mirostat learning rate")
+    
+    @model_validator(mode='after')
+    def validate_prompt_or_messages(self):
+        """Ensure either prompt or messages is provided, but not both"""
+        prompt = self.prompt
+        messages = self.messages
+        
+        if not prompt and not messages:
+            raise ValueError("Either 'prompt' or 'messages' must be provided")
+        if prompt and messages:
+            raise ValueError("Provide either 'prompt' OR 'messages', not both")
+        
+        # Validate messages if provided
+        if messages and len(messages) == 0:
+            raise ValueError("Messages list cannot be empty")
+            
+        return self
+
+
+class GenerateResponse(BaseModel):
+    """Response schema for text generation"""
+    text: str = Field(..., description="Generated text output")
+    tokens_generated: int = Field(..., description="Number of tokens generated")
+    generation_time: float = Field(..., description="Time taken for generation in seconds")
+    tokens_per_second: float = Field(..., description="Generation speed in tokens per second")
+
+
+class StreamChunk(BaseModel):
+    """Schema for streaming response chunks"""
+    delta: str = Field(..., description="Generated text chunk")
+    tokens_generated: int = Field(0, description="Total tokens generated so far")
+    generation_time: float = Field(0.0, description="Time elapsed since generation started")
+    tokens_per_second: float = Field(0.0, description="Current generation speed")
+    is_final: bool = Field(False, description="Whether this is the final chunk")
+
+
+class ModelInfo(BaseModel):
+    """Model information response"""
+    model_config = ConfigDict(protected_namespaces=())
+    
+    name: str = Field(..., description="Model name")
+    type: ModelType = Field(..., description="Model type")
+    loaded: bool = Field(..., description="Whether model is currently loaded")
+    memory_usage: Optional[Dict[str, Any]] = Field(None, description="Memory usage statistics")
+    load_time: Optional[float] = Field(None, description="Time taken to load model")
+
+
+class ModelLoadRequest(BaseModel):
+    """Request schema for loading a model"""
+    model_config = ConfigDict(protected_namespaces=())
+    
+    model_name: str = Field(..., description="Name of the model to load")
+    model_type: ModelType = Field(ModelType.HUGGINGFACE, description="Type of model to load")
+    force_reload: bool = Field(False, description="Force reload even if already loaded")
+    preferred_quant: Optional[str] = Field(None, description="Preferred quantization (e.g., 'Q4_K_M', 'Q8_0'). If not found, falls back to defaults.")
+
+
+class HealthResponse(BaseModel):
+    """Health check response"""
+    model_config = ConfigDict(protected_namespaces=())
+    
+    status: str = Field(..., description="Service status")
+    uptime: float = Field(..., description="Service uptime in seconds")
+    model_loaded: bool = Field(..., description="Whether a model is currently loaded")
+    memory_usage: Optional[Dict[str, Any]] = Field(None, description="System memory usage")
+    timestamp: float = Field(default_factory=time.time, description="Response timestamp")
+
+
+class ErrorResponse(BaseModel):
+    """Error response schema"""
+    error: str = Field(..., description="Error message")
+    detail: Optional[str] = Field(None, description="Detailed error information")
+    timestamp: float = Field(default_factory=time.time, description="Error timestamp")
+</file>
+
+<file path="app/main.py">
+import os
+import logging
+import asyncio
+from contextlib import asynccontextmanager
+import httpx
+
+# Environment optimizations for CPU inference
+os.environ["OMP_NUM_THREADS"] = str(os.cpu_count())
+os.environ["MKL_NUM_THREADS"] = str(os.cpu_count())
+os.environ["OPENBLAS_NUM_THREADS"] = str(os.cpu_count())
+os.environ["VECLIB_MAXIMUM_THREADS"] = str(os.cpu_count())
+os.environ["NUMEXPR_NUM_THREADS"] = str(os.cpu_count())
+
+# Enable Railway-specific optimizations
+if os.getenv("RAILWAY_ENVIRONMENT"):
+    os.environ["MALLOC_TRIM_THRESHOLD_"] = "100000"
+    os.environ["MALLOC_MMAP_THRESHOLD_"] = "131072"
+
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.base import BaseHTTPMiddleware
+
+from app.api.endpoints import router, limiter
+from app.models.llm_handler import llm_handler
+from app.schemas.models import ModelType
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Configuration from environment variables
+MODEL_NAME = os.getenv("MODEL_NAME", "TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF")
+MODEL_TYPE = os.getenv("MODEL_TYPE", "gguf") 
+LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "true").lower() == "true"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    logger.info("Starting FastAPI LLM Inference Server")
+    logger.info(f"Model: {MODEL_NAME} (Type: {MODEL_TYPE})")
+    logger.info(f"Load on startup: {LOAD_MODEL_ON_STARTUP}")
+
+    # Create a global HTTPX async client with OPTIMIZED connection pooling
+    app.state.http_client = httpx.AsyncClient(
+        limits=httpx.Limits(
+            max_keepalive_connections=50,    # Increased keepalive connections
+            max_connections=200,             # Increased max connections
+            keepalive_expiry=30.0           # Keep connections alive for 30s
+        ),
+        timeout=httpx.Timeout(
+            connect=10.0,    # Connection timeout
+            read=60.0,       # Read timeout for LLM responses
+            write=10.0,      # Write timeout
+            pool=5.0         # Pool timeout
+        ),
+        http2=True,          # Enable HTTP/2 for better performance
+        follow_redirects=True
+    )
+    
+    # Load model on startup if configured
+    if LOAD_MODEL_ON_STARTUP:
+        try:
+            logger.info("Loading model on startup...")
+            model_type = ModelType(MODEL_TYPE)
+            await llm_handler.load_model(MODEL_NAME, model_type)
+            logger.info("Model loaded successfully on startup")
+        except Exception as e:
+            logger.error(f"Failed to load model on startup: {str(e)}")
+            logger.info("Server will start without a loaded model")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down FastAPI LLM Inference Server")
+    # Properly close the HTTPX client
+    await app.state.http_client.aclose()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="FastAPI LLM Inference Server",
+    description="Production-ready FastAPI server for LLM inference with streaming support",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+
+# Add CORS middleware with optimized settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],  # Limit to needed methods
+    allow_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
+)
+
+# Add GZip compression middleware for faster responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Add performance headers middleware
+class PerformanceMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Add performance headers
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Server"] = "FastAPI-LLM"
+        return response
+
+app.add_middleware(PerformanceMiddleware)
+
+# Add rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Include API routes
+app.include_router(router, prefix="/api/v1")
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint with basic server information"""
+    return {
+        "message": "FastAPI LLM Inference Server",
+        "version": "1.0.0",
+        "model_loaded": llm_handler.is_loaded(),
+        "current_model": llm_handler.model_name if llm_handler.is_loaded() else None,
+        "endpoints": {
+            "generate": "/api/v1/generate",
+            "generate_stream": "/api/v1/generate/stream",
+            "model_info": "/api/v1/model/info",
+            "model_load": "/api/v1/model/load",
+            "health": "/api/v1/health",
+            "ping": "/api/v1/ping"
+        }
+    }
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unhandled errors"""
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "detail": "An unexpected error occurred"
+        }
+    )
+
+
+# Health check endpoint (duplicate for Railway)
+@app.get("/ping")
+async def ping():
+    """Simple ping endpoint for Railway health checks"""
+    return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+    workers = int(os.getenv("WORKERS", "1"))  # Default single worker, set via env
+    
+    # For Railway deployment with 48 cores, consider:
+    # WORKERS=8-16 (conservative for shared environment)
+    # For local development, keep workers=1
+    
+    if workers > 1:
+        logger.info(f"Starting with {workers} workers for multi-core performance")
+        # Use gunicorn for multi-worker deployment
+        # Railway: set WORKERS=8 in environment variables
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            workers=workers,
+            reload=False,
+            log_level="info",
+            access_log=False,      # Disable access logs for performance
+            use_colors=False,      # Disable colors in production
+            loop="uvloop",         # Use faster event loop if available
+            http="httptools"       # Use faster HTTP parser if available
+        )
+    else:
+        # Single worker mode (development)
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            reload=False,
+            log_level="info",
+            loop="uvloop",         # Use faster event loop if available
+            http="httptools"       # Use faster HTTP parser if available
+        )
+</file>
+
+</files>
