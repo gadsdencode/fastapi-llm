@@ -3,6 +3,18 @@ import logging
 import asyncio
 from contextlib import asynccontextmanager
 import httpx
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.api.endpoints import router, limiter
+from app.models.llm_handler import llm_handler
+from app.schemas.models import ModelType
 
 # Environment optimizations for CPU inference
 os.environ["OMP_NUM_THREADS"] = str(os.cpu_count())
@@ -16,19 +28,6 @@ if os.getenv("RAILWAY_ENVIRONMENT"):
     os.environ["MALLOC_TRIM_THRESHOLD_"] = "100000"
     os.environ["MALLOC_MMAP_THRESHOLD_"] = "131072"
 
-from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.middleware.base import BaseHTTPMiddleware
-
-from app.api.endpoints import router, limiter
-from app.models.llm_handler import llm_handler
-from app.schemas.models import ModelType
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -38,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration from environment variables
 MODEL_NAME = os.getenv("MODEL_NAME", "TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF")
-MODEL_TYPE = os.getenv("MODEL_TYPE", "gguf") 
+MODEL_TYPE = os.getenv("MODEL_TYPE", "gguf")
 LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "true").lower() == "true"
 
 
@@ -66,7 +65,7 @@ async def lifespan(app: FastAPI):
         http2=True,          # Enable HTTP/2 for better performance
         follow_redirects=True
     )
-    
+
     # Load model on startup if configured
     if LOAD_MODEL_ON_STARTUP:
         try:
@@ -77,9 +76,9 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to load model on startup: {str(e)}")
             logger.info("Server will start without a loaded model")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down FastAPI LLM Inference Server")
     # Properly close the HTTPX client
@@ -109,6 +108,7 @@ app.add_middleware(
 # Add GZip compression middleware for faster responses
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+
 # Add performance headers middleware
 class PerformanceMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -120,6 +120,7 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         response.headers["Server"] = "FastAPI-LLM"
         return response
 
+
 app.add_middleware(PerformanceMiddleware)
 
 # Add rate limiting
@@ -128,6 +129,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Include API routes
 app.include_router(router, prefix="/api/v1")
+
 
 # Root endpoint
 @app.get("/")
@@ -172,15 +174,15 @@ async def ping():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
     workers = int(os.getenv("WORKERS", "1"))  # Default single worker, set via env
-    
+
     # For Railway deployment with 48 cores, consider:
     # WORKERS=8-16 (conservative for shared environment)
     # For local development, keep workers=1
-    
+
     if workers > 1:
         logger.info(f"Starting with {workers} workers for multi-core performance")
         # Use gunicorn for multi-worker deployment
@@ -207,4 +209,4 @@ if __name__ == "__main__":
             log_level="info",
             loop="uvloop",         # Use faster event loop if available
             http="httptools"       # Use faster HTTP parser if available
-        ) 
+        )
