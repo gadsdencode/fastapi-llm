@@ -1,13 +1,11 @@
 import os
 import logging
-import asyncio
 from contextlib import asynccontextmanager
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -23,6 +21,13 @@ os.environ["OPENBLAS_NUM_THREADS"] = str(os.cpu_count())
 os.environ["VECLIB_MAXIMUM_THREADS"] = str(os.cpu_count())
 os.environ["NUMEXPR_NUM_THREADS"] = str(os.cpu_count())
 
+# Configure logging first
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Enable Railway-specific optimizations
 if os.getenv("RAILWAY_ENVIRONMENT"):
     os.environ["MALLOC_TRIM_THRESHOLD_"] = "100000"
@@ -30,23 +35,40 @@ if os.getenv("RAILWAY_ENVIRONMENT"):
 
 # Enable Azure-specific optimizations
 if os.getenv("AZURE_DEPLOYMENT"):
+    # Detect Azure App Service tier for optimal configuration
+    azure_sku = os.getenv("WEBSITE_SKU", "Free")
+    logger.info(f"Azure App Service tier detected: {azure_sku}")
+    
     # Disable model loading on startup for faster Azure startup
     os.environ["LOAD_MODEL_ON_STARTUP"] = "false"
-    # Reduce memory usage for Azure container limits
-    os.environ["OMP_NUM_THREADS"] = "2"
-    os.environ["MKL_NUM_THREADS"] = "2"
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+    
+    if azure_sku in ["Free", "Shared"]:
+        # Conservative settings for lower tiers
+        os.environ["OMP_NUM_THREADS"] = "1"
+        os.environ["MKL_NUM_THREADS"] = "1"
+        os.environ["LLM_MAX_CONTEXT"] = "512"
+        logger.info("Applied Free/Shared tier optimizations")
+    elif azure_sku in ["Basic"]:
+        # Basic tier optimizations
+        os.environ["OMP_NUM_THREADS"] = "2"
+        os.environ["MKL_NUM_THREADS"] = "2"
+        os.environ["LLM_MAX_CONTEXT"] = "1024"
+        logger.info("Applied Basic tier optimizations")
+    else:
+        # Standard/Premium tier optimizations
+        os.environ["OMP_NUM_THREADS"] = "4"
+        os.environ["MKL_NUM_THREADS"] = "4"
+        os.environ["LLM_MAX_CONTEXT"] = "2048"
+        logger.info("Applied Standard/Premium tier optimizations")
 
 # Configuration from environment variables
-MODEL_NAME = os.getenv("MODEL_NAME", "TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF")
+MODEL_NAME = os.getenv(
+    "MODEL_NAME", "TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF"
+)
 MODEL_TYPE = os.getenv("MODEL_TYPE", "gguf")
-LOAD_MODEL_ON_STARTUP = os.getenv("LOAD_MODEL_ON_STARTUP", "true").lower() == "true"
+LOAD_MODEL_ON_STARTUP = (
+    os.getenv("LOAD_MODEL_ON_STARTUP", "true").lower() == "true"
+)
 
 
 @asynccontextmanager
@@ -98,7 +120,8 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="FastAPI LLM Inference Server",
-    description="Production-ready FastAPI server for LLM inference with streaming support",
+    description="Production-ready FastAPI server for LLM inference "
+                "with streaming support",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -126,7 +149,9 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Cache-Control"] = (
+            "no-cache, no-store, must-revalidate"
+        )
         response.headers["Server"] = "FastAPI-LLM"
         return response
 

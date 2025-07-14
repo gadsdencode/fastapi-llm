@@ -4,10 +4,15 @@ import logging
 import psutil
 import asyncio
 import re
-from typing import Optional, Dict, Any, Iterator, AsyncIterator, Tuple, List
+from typing import Optional, Dict, Any, AsyncIterator, Tuple, List
 from dataclasses import dataclass
 
 from llama_cpp import Llama
+from ..schemas.models import (
+    ModelType, GenerateRequest, GenerateResponse, 
+    StreamChunk, ModelInfo, ChatMessage
+)
+from ..config import get_template_manager
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +22,8 @@ try:
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
-    logger.warning("transformers not available, Hugging Face chat templates will not be used")
-
-from ..schemas.models import ModelType, GenerateRequest, GenerateResponse, StreamChunk, ModelInfo, ChatMessage
-from ..config import get_template_manager
+    logger.warning("transformers not available, Hugging Face chat "
+                   "templates will not be used")
 
 
 @dataclass
@@ -250,8 +253,10 @@ class LLMHandler:
             }
         }
     
-    def _get_optimal_threads(self, cpu_count: int, model_name: str = "") -> Tuple[int, int]:
-        """ULTRA-optimized threading: Research shows 4-8 threads optimal for CPU inference"""
+    def _get_optimal_threads(self, cpu_count: int, 
+                            model_name: str = "") -> Tuple[int, int]:
+        """ULTRA-optimized threading: Research shows 4-8 threads optimal 
+        for CPU inference"""
         # Allow env overrides for easy tuning
         env_main = os.getenv("LLM_THREADS_MAIN")
         env_batch = os.getenv("LLM_THREADS_BATCH")
@@ -399,6 +404,29 @@ class LLMHandler:
         if self.is_loaded() and self.model_name == model_name and not force_reload:
             logger.info(f"Model {model_name} already loaded")
             return True
+        
+        # Azure-specific model loading optimizations
+        if os.getenv("AZURE_DEPLOYMENT"):
+            azure_sku = os.getenv("WEBSITE_SKU", "Free")
+            if azure_sku in ["Free", "Basic"]:
+                logger.warning(f"Azure {azure_sku} tier detected. "
+                              "Consider using smaller models for better performance.")
+            
+            # Implement timeout for model loading on Azure
+            try:
+                return await asyncio.wait_for(
+                    self._load_model_internal(model_name, model_type, force_reload, preferred_quant),
+                    timeout=300  # 5-minute timeout for Azure
+                )
+            except asyncio.TimeoutError:
+                logger.error("Model loading timed out on Azure App Service")
+                raise RuntimeError("Model loading timed out. Consider using a smaller model or upgrading Azure tier.")
+        else:
+            # Standard loading for non-Azure environments
+            return await self._load_model_internal(model_name, model_type, force_reload, preferred_quant)
+    
+    async def _load_model_internal(self, model_name: str, model_type: ModelType, force_reload: bool, preferred_quant: Optional[str]) -> bool:
+        """Internal model loading method with full implementation"""
         cpu_count = os.cpu_count() or 48
         optimal_threads, optimal_batch_threads = self._get_optimal_threads(cpu_count, model_name)
         self._setup_cpu_optimization_env(optimal_threads)

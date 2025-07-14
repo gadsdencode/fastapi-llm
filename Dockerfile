@@ -1,53 +1,59 @@
-# Use Python 3.11 slim image for smaller size
+# Azure-optimized Dockerfile for FastAPI LLM server
 FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for Azure App Service
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Set environment variables
+# Azure-specific environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+ENV AZURE_DEPLOYMENT=true
+ENV LOAD_MODEL_ON_STARTUP=false
 ENV TRANSFORMERS_CACHE=/app/models
 ENV HF_HOME=/app/models
-ENV MODEL_NAME=v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
-ENV MODEL_TYPE=huggingface
+ENV MODEL_TYPE=gguf
 ENV PORT=8000
-ENV LOAD_MODEL_ON_STARTUP=false
-ENV AZURE_DEPLOYMENT=true
 
-# Create models directory
-RUN mkdir -p /app/models
+# Azure App Service optimizations
+ENV WEBSITE_TIME_ZONE="UTC"
+ENV WEBSITE_ENABLE_SYNC_UPDATE_SITE=true
 
-# Copy requirements first for better caching
+# Copy requirements and install dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
 
-# Make startup script executable
-RUN chmod +x start_azure.sh
+# Create models directory with proper permissions
+RUN mkdir -p /app/models && \
+    chmod 755 /app/models
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash app && \
-    chown -R app:app /app
+# Make startup scripts executable
+RUN chmod +x startup.py && \
+    chmod +x start_azure.sh
+
+# Create non-root user for security (Azure compatible)
+RUN useradd --create-home --shell /bin/bash --uid 1000 app && \
+    chown -R app:app /app && \
+    usermod -aG root app
 USER app
 
-# Expose port
+# Expose port (Azure App Service will use PORT env var)
 EXPOSE $PORT
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+# Azure-optimized health check
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=2 \
     CMD curl -f http://localhost:$PORT/ping || exit 1
 
-# Run the application using startup script
-CMD ["./start_azure.sh"] 
+# Use Azure-optimized startup script
+CMD ["python", "startup.py"] 

@@ -232,7 +232,26 @@ Built-in rate limiting is configured per endpoint:
 - `/health`: 60 requests/minute
 - `/ping`: 120 requests/minute
 
-## Railway Deployment
+## Deployment Options
+
+### Azure Web App (Recommended for Production)
+
+✅ **Fully Optimized** - Complete Azure Web App compatibility with tier-based optimizations.
+
+See the comprehensive [Azure Deployment Guide](AZURE_DEPLOYMENT_GUIDE.md) for:
+- Step-by-step deployment instructions
+- Tier-specific optimizations (Free, Basic, Standard, Premium)
+- Resource management and cost optimization
+- Troubleshooting and monitoring
+
+Quick Azure deployment:
+```bash
+# Deploy via GitHub Actions (recommended)
+# Or use Azure CLI
+az webapp create --name your-app --runtime "PYTHON|3.11"
+```
+
+### Railway Deployment
 
 ### Prerequisites
 
