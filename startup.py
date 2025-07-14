@@ -1,97 +1,81 @@
 #!/usr/bin/env python3
 """
 Azure App Service startup script for FastAPI LLM server
-Optimized for Azure Web App deployment with proper logging and error handling
+Simplified for Azure compatibility with proper error handling
 """
 import os
 import sys
 import logging
-import uvicorn
+
+# Add the current directory to Python path to fix import issues
+sys.path.insert(0, '/home/site/wwwroot')
+sys.path.insert(0, '/home/site/wwwroot/app')
 
 # Configure logging for Azure App Service
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
 logger = logging.getLogger(__name__)
 
 
-def get_azure_optimized_config():
-    """Get Azure-optimized uvicorn configuration based on App Service tier"""
-    port = int(os.getenv("PORT", 8000))
-    
-    # Detect Azure App Service tier for optimal configuration
-    azure_sku = os.getenv("WEBSITE_SKU", "Free")
-    workers = 1  # Azure App Service works best with single worker
-    
-    logger.info(f"Azure App Service tier detected: {azure_sku}")
-    logger.info(f"Starting FastAPI LLM server on port {port}")
-    
-    config = {
-        "app": "app.main:app",
-        "host": "0.0.0.0",
-        "port": port,
-        "workers": workers,
-        "timeout_keep_alive": 300,
-        "log_level": "info",
-        "access_log": True,
-        "reload": False,
-        "use_colors": False,  # Disable colors for Azure logs
-    }
-    
-    # Azure-specific optimizations
-    if azure_sku in ["Free", "Shared"]:
-        # Conservative settings for lower tiers
-        config.update({
-            "timeout_keep_alive": 120,
-            "limit_concurrency": 10,
-            "limit_max_requests": 100,
-        })
-        logger.info("Applied Free/Shared tier optimizations")
-    elif azure_sku in ["Basic"]:
-        # Basic tier optimizations
-        config.update({
-            "timeout_keep_alive": 200,
-            "limit_concurrency": 50,
-            "limit_max_requests": 500,
-        })
-        logger.info("Applied Basic tier optimizations")
-    else:
-        # Standard/Premium tier optimizations
-        config.update({
-            "timeout_keep_alive": 300,
-            "limit_concurrency": 100,
-            "limit_max_requests": 1000,
-        })
-        logger.info("Applied Standard/Premium tier optimizations")
-    
-    # Use standard asyncio for better Azure compatibility
-    config["loop"] = "asyncio"
-    config["http"] = "h11"  # Use h11 for better Azure compatibility
-    
-    return config
-
-
 def main():
-    """Main startup function for Azure App Service"""
+    """Start the FastAPI application with Azure-optimized configuration"""
     try:
-        logger.info("Starting Azure App Service FastAPI LLM server...")
+        # Log startup information
+        logger.info("Starting Azure App Service FastAPI application")
+        logger.info(f"Python path: {sys.path}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"PORT environment variable: {os.getenv('PORT', '8000')}")
         
-        # Set Azure deployment flag
-        os.environ["AZURE_DEPLOYMENT"] = "true"
+        # Azure App Service specific configuration
+        port = int(os.getenv("PORT", 8000))
+        workers = 1  # Start with single worker for Azure
         
-        # Get optimized configuration
-        config = get_azure_optimized_config()
+        # Azure tier detection
+        azure_sku = os.getenv("WEBSITE_SKU", "Free")
+        logger.info(f"Azure App Service tier: {azure_sku}")
         
-        # Start the server
-        uvicorn.run(**config)
+        # Import uvicorn here to avoid early import issues
+        import uvicorn
+        
+        # Try to import the FastAPI app
+        try:
+            from app.main import app
+            logger.info("Successfully imported app from app.main")
+        except ImportError as e:
+            logger.error(f"Failed to import app.main: {e}")
+            # Try alternative import paths
+            try:
+                import main
+                app = main.app
+                logger.info("Successfully imported app from main module")
+            except ImportError as e2:
+                logger.error(f"Failed to import main: {e2}")
+                sys.exit(1)
+        
+        # Configure uvicorn for Azure App Service
+        uvicorn_config = {
+            "app": app,
+            "host": "0.0.0.0",
+            "port": port,
+            "workers": workers,
+            "log_level": "info",
+            "access_log": True,
+            "use_colors": False,  # Disable colors for Azure logs
+            "timeout_keep_alive": 30,
+            "timeout_graceful_shutdown": 10
+        }
+        
+        logger.info(f"Starting uvicorn server on 0.0.0.0:{port}")
+        uvicorn.run(**uvicorn_config)
         
     except Exception as e:
-        logger.error(f"Failed to start server: {str(e)}")
+        logger.error(f"Failed to start application: {str(e)}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         sys.exit(1)
 
 
