@@ -1,0 +1,30 @@
+# Simplified Dockerfile for Azure troubleshooting
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables for Azure
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV LOAD_MODEL_ON_STARTUP=false
+ENV AZURE_DEPLOYMENT=true
+
+# Copy and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Create models directory
+RUN mkdir -p /app/models
+
+# Simple startup command
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 300 

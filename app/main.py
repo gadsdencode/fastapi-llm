@@ -28,6 +28,14 @@ if os.getenv("RAILWAY_ENVIRONMENT"):
     os.environ["MALLOC_TRIM_THRESHOLD_"] = "100000"
     os.environ["MALLOC_MMAP_THRESHOLD_"] = "131072"
 
+# Enable Azure-specific optimizations
+if os.getenv("AZURE_DEPLOYMENT"):
+    # Disable model loading on startup for faster Azure startup
+    os.environ["LOAD_MODEL_ON_STARTUP"] = "false"
+    # Reduce memory usage for Azure container limits
+    os.environ["OMP_NUM_THREADS"] = "2"
+    os.environ["MKL_NUM_THREADS"] = "2"
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +54,8 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events"""
     # Startup
     logger.info("Starting FastAPI LLM Inference Server")
+    logger.info(f"Azure deployment: {os.getenv('AZURE_DEPLOYMENT', 'false')}")
+    logger.info(f"Port: {os.getenv('PORT', '8000')}")
     logger.info(f"Model: {MODEL_NAME} (Type: {MODEL_TYPE})")
     logger.info(f"Load on startup: {LOAD_MODEL_ON_STARTUP}")
 

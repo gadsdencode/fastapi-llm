@@ -19,6 +19,7 @@ ENV MODEL_NAME=v8karlo/UNCENSORED-TinyDolphin-3x-MoE-Q4_K_M-GGUF
 ENV MODEL_TYPE=huggingface
 ENV PORT=8000
 ENV LOAD_MODEL_ON_STARTUP=false
+ENV AZURE_DEPLOYMENT=true
 
 # Create models directory
 RUN mkdir -p /app/models
@@ -33,6 +34,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Make startup script executable
+RUN chmod +x start_azure.sh
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app
@@ -45,5 +49,5 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/ping || exit 1
 
-# Run the application
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} 
+# Run the application using startup script
+CMD ["./start_azure.sh"] 
