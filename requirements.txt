@@ -1,6 +1,6 @@
 # FastAPI and server dependencies - strict versions for Azure compatibility
 fastapi==0.104.1
-starlette==0.27.0
+starlette
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 anyio==3.7.1

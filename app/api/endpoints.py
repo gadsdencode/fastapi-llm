@@ -41,7 +41,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # OPTIMIZED Redis client with connection pooling
 redis_client = redis.from_url(
-    REDIS_URL, 
+    REDIS_URL,
     decode_responses=True,
     max_connections=20,          # Connection pool size
     retry_on_timeout=True,       # Retry on timeout
@@ -105,7 +105,7 @@ async def clear_response_cache():
     except Exception as e:
         logger.error(f"Redis clear error: {e}")
 
-async def get_cache_stats():
+async def _get_cache_stats_internal():
     try:
         # Use pipeline for multiple Redis operations
         async with redis_client.pipeline() as pipe:
@@ -316,7 +316,7 @@ async def health_check(request: Request):
         
         # Add cache statistics
         cache_stats = {
-            "cache_size": await get_cache_stats()["cache_keys"]
+            "cache_size": await _get_cache_stats_internal()["cache_keys"]
         }
         
         memory_usage = llm_handler.get_memory_usage()
@@ -364,10 +364,10 @@ async def get_cache_stats(
     _: bool = Depends(verify_api_key)
 ):
     """Get cache statistics"""
-    return await get_cache_stats()
+    return await _get_cache_stats_internal()
 
 
 # Store start time for uptime calculation
 health_check.start_time = time.time()
 health_check.cache_hits = 0
-health_check.total_requests = 0 
+health_check.total_requests = 0
